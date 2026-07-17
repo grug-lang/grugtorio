@@ -24,6 +24,8 @@ int main(void) {
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(0, 0, "grug-factory engine");
+    
+    HideCursor();
 
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
@@ -41,6 +43,8 @@ int main(void) {
         int num = (i == 9) ? 0 : i + 1;
         textures[i] = LoadTexture(TextFormat("textures/tiles/%d.png", num));
     }
+    
+    Texture2D cursorTex = LoadTexture("textures/cursor.png");
 
     Tile* tiles = NULL;
     int tileCount = 0;
@@ -114,6 +118,15 @@ int main(void) {
             }
         }
 
+        if (IsKeyPressed(KEY_Q)) {
+            for (int i = 0; i < tileCount; i++) {
+                if (tiles[i].x == gridX && tiles[i].y == gridY) {
+                    currentTexIndex = tiles[i].texIdx;
+                    break;
+                }
+            }
+        }
+
         double input_end = get_time_ms();
         logic_time = input_end - frame_start;
 
@@ -173,12 +186,15 @@ int main(void) {
             if (i == currentTexIndex) DrawRectangleLines(x - 2, y - 2, itemSize + 4, itemSize + 4, WHITE);
         }
 
+        DrawTextureV(cursorTex, GetMousePosition(), WHITE);
+
         EndDrawing();
 
         render_time = get_time_ms() - input_end;
     }
 
     for (int i = 0; i < 10; i++) UnloadTexture(textures[i]);
+    UnloadTexture(cursorTex);
     free(tiles);
     CloseWindow();
 }
