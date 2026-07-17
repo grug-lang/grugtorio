@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define UPS 60.0
+#define UPDATE_DT_MS (1000.0 / UPS)
+#define MAX_ACCUMULATED_MS 250.0
+#define MAX_TICKS_PER_FRAME 5
+
 typedef struct {
     int x;
     int y;
@@ -22,12 +27,16 @@ static double get_time_ms() {
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
 }
 
+static void game_logic_tick(void) {
+    printf("foo\n");
+}
+
 int main(void) {
     grug_default_settings();
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(0, 0, "grug-factory engine");
-    
+
     HideCursor();
 
     int screenWidth = GetScreenWidth();
@@ -46,7 +55,7 @@ int main(void) {
         int num = (i == 9) ? 0 : i + 1;
         textures[i] = LoadTexture(TextFormat("textures/tiles/%d.png", num));
     }
-    
+
     Texture2D cursorTex = LoadTexture("textures/cursor.png");
 
     Tile* tiles = NULL;
@@ -57,9 +66,29 @@ int main(void) {
     double logic_time = 0.0;
     double render_time = 0.0;
 
+    double last_time = get_time_ms();
+    double accumulator = 0.0;
+
     while (!WindowShouldClose()) {
         double frame_start = get_time_ms();
         float dt = GetFrameTime();
+
+        double now = get_time_ms();
+        double elapsed = now - last_time;
+        last_time = now;
+        if (elapsed > MAX_ACCUMULATED_MS) elapsed = MAX_ACCUMULATED_MS;
+        accumulator += elapsed;
+
+        int ticks_this_frame = 0;
+        while (accumulator >= UPDATE_DT_MS) {
+            game_logic_tick();
+            accumulator -= UPDATE_DT_MS;
+            ticks_this_frame++;
+            if (ticks_this_frame >= MAX_TICKS_PER_FRAME) {
+                accumulator = 0.0;
+                break;
+            }
+        }
 
         for (int i = 0; i < 9; i++) if (IsKeyPressed(KEY_ONE + i)) currentTexIndex = i;
         if (IsKeyPressed(KEY_ZERO)) currentTexIndex = 9;
