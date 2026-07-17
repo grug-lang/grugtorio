@@ -1,27 +1,29 @@
 #include "raylib.h"
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <math.h>
-
+#include <time.h>
 #include "grug.h"
 
 typedef struct {
-    int x; 
-    int y; 
+    int x;
+    int y;
 } Tile;
 
+static double get_time_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
+}
+
 int main(void) {
-    // --- 0. Grug Integration Test ---
-    // Prove we can link against and call functions from the grug-rs static library
     grug_default_settings();
 
-    // --- 1. Window Setup ---
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(0, 0, "grug-factory engine");
 
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
-    // 2. Initialize the 2D Camera
     Camera2D camera = { 0 };
     camera.target = (Vector2){ 0.0f, 0.0f };
     camera.offset = (Vector2){ screenWidth / 2.0f, screenHeight / 2.0f };
@@ -30,15 +32,17 @@ int main(void) {
     SetTargetFPS(60);
     const int tileSize = 64;
 
-    // Tile management
     Tile* tiles = NULL;
     int tileCount = 0;
     int tileCapacity = 0;
 
+    double logic_time = 0.0;
+    double render_time = 0.0;
+
     while (!WindowShouldClose()) {
+        double frame_start = get_time_ms();
         float dt = GetFrameTime();
 
-        // --- 3. Handle Input ---
         float moveSpeed = 500.0f / camera.zoom * dt;
         if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed;
         if (IsKeyDown(KEY_S)) camera.target.y += moveSpeed;
@@ -46,7 +50,6 @@ int main(void) {
         if (IsKeyDown(KEY_D)) camera.target.x += moveSpeed;
         if (IsKeyPressed(KEY_F)) ToggleFullscreen();
 
-        // Zoom logic
         float wheel = GetMouseWheelMove();
         if (wheel != 0.0f) {
             Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
@@ -58,7 +61,6 @@ int main(void) {
             camera.target.y += (mouseWorldPos.y - mouseWorldPosNew.y);
         }
 
-        // --- 4. Tile Placement/Removal ---
         Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
         int gridX = (int)floorf(mouseWorld.x / tileSize);
         int gridY = (int)floorf(mouseWorld.y / tileSize);
@@ -86,14 +88,15 @@ int main(void) {
                 }
             }
         }
+        
+        double input_end = get_time_ms();
+        logic_time = input_end - frame_start;
 
-        // --- 5. Draw Phase ---
         BeginDrawing();
         ClearBackground((Color){ 20, 20, 20, 255 });
 
         BeginMode2D(camera);
 
-        // Draw Grid
         Vector2 screenTopLeft = GetScreenToWorld2D((Vector2){ 0, 0 }, camera);
         Vector2 screenBottomRight = GetScreenToWorld2D((Vector2){ screenWidth, screenHeight }, camera);
         int startX = (int)floorf(screenTopLeft.x / tileSize) - 1;
@@ -104,19 +107,25 @@ int main(void) {
         for (int x = startX; x <= endX; x++) DrawLine(x * tileSize, startY * tileSize, x * tileSize, endY * tileSize, (Color){ 45, 45, 45, 255 });
         for (int y = startY; y <= endY; y++) DrawLine(startX * tileSize, y * tileSize, endX * tileSize, y * tileSize, (Color){ 45, 45, 45, 255 });
 
-        // Draw Tiles
         for (int i = 0; i < tileCount; i++) {
             DrawRectangle(tiles[i].x * tileSize, tiles[i].y * tileSize, tileSize, tileSize, RED);
         }
 
         EndMode2D();
 
-        // UI Layer
         DrawText(TextFormat("Tile Coord: (%d, %d)", gridX, gridY), 10, 10, 20, RAYWHITE);
         DrawText(TextFormat("Total Tiles: %d", tileCount), 10, 35, 20, GRAY);
         DrawText(TextFormat("Zoom: %.2fx", camera.zoom), 10, 60, 20, GRAY);
 
+        const char* perf_text1 = TextFormat("Logic: %.3f ms", logic_time);
+        const char* perf_text2 = TextFormat("Render: %.3f ms", render_time);
+        
+        DrawText(perf_text1, screenWidth - MeasureText(perf_text1, 20) - 10, 10, 20, SKYBLUE);
+        DrawText(perf_text2, screenWidth - MeasureText(perf_text2, 20) - 10, 35, 20, SKYBLUE);
+
         EndDrawing();
+        
+        render_time = get_time_ms() - input_end;
     }
 
     free(tiles);
