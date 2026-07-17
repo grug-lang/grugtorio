@@ -15,7 +15,7 @@ This repository answers key architecture questions for grug:
 
 ## Building
 
-Requires CMake, a C11 compiler, Raylib, and the `grug-rs` shared library.
+Requires CMake, a C11 compiler, and Raylib.
 
 ```bash
 cmake -B build
