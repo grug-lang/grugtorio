@@ -1,13 +1,16 @@
-#include "raylib.h"
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
 #include "grug.h"
+#include "raylib.h"
+
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 typedef struct {
     int x;
     int y;
     int texIdx;
+    int rotation;
 } Tile;
 
 static double get_time_ms() {
@@ -88,7 +91,7 @@ int main(void) {
                     tileCapacity = (tileCapacity == 0) ? 10 : tileCapacity * 2;
                     tiles = realloc(tiles, tileCapacity * sizeof(Tile));
                 }
-                tiles[tileCount++] = (Tile){ gridX, gridY, currentTexIndex };
+                tiles[tileCount++] = (Tile){ gridX, gridY, currentTexIndex, 0 };
             }
         }
 
@@ -101,7 +104,16 @@ int main(void) {
                 }
             }
         }
-        
+
+        if (IsKeyPressed(KEY_R)) {
+            for (int i = 0; i < tileCount; i++) {
+                if (tiles[i].x == gridX && tiles[i].y == gridY) {
+                    tiles[i].rotation = (tiles[i].rotation + 90) % 360;
+                    break;
+                }
+            }
+        }
+
         double input_end = get_time_ms();
         logic_time = input_end - frame_start;
 
@@ -123,8 +135,17 @@ int main(void) {
         for (int i = 0; i < tileCount; i++) {
             Texture2D tex = textures[tiles[i].texIdx];
             Rectangle src = { 0, 0, (float)tex.width, (float)tex.height };
-            Rectangle dest = { (float)tiles[i].x * tileSize, (float)tiles[i].y * tileSize, (float)tileSize, (float)tileSize };
-            DrawTexturePro(tex, src, dest, (Vector2){0, 0}, 0, WHITE);
+
+            Rectangle dest = {
+                (float)tiles[i].x * tileSize + (tileSize / 2.0f),
+                (float)tiles[i].y * tileSize + (tileSize / 2.0f),
+                (float)tileSize,
+                (float)tileSize
+            };
+
+            Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
+
+            DrawTexturePro(tex, src, dest, origin, (float)tiles[i].rotation, WHITE);
         }
 
         EndMode2D();
@@ -153,7 +174,7 @@ int main(void) {
         }
 
         EndDrawing();
-        
+
         render_time = get_time_ms() - input_end;
     }
 
