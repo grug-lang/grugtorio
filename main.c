@@ -9,6 +9,9 @@
 typedef struct {
     int x;
     int y;
+    int originX;
+    int originY;
+    int size;
     int texIdx;
     int rotation;
 } Tile;
@@ -86,25 +89,50 @@ int main(void) {
         bool mouseOverToolbar = (GetMouseY() > screenHeight - 70);
 
         if (!mouseOverToolbar && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && currentTexIndex != -1) {
-            bool exists = false;
-            for (int i = 0; i < tileCount; i++) {
-                if (tiles[i].x == gridX && tiles[i].y == gridY) { exists = true; break; }
+            int size = currentTexIndex + 1;
+            bool canPlace = true;
+            for (int dx = 0; dx < size; dx++) {
+                for (int dy = 0; dy < size; dy++) {
+                    int cx = gridX + dx;
+                    int cy = gridY + dy;
+                    for (int i = 0; i < tileCount; i++) {
+                        if (tiles[i].x == cx && tiles[i].y == cy) { canPlace = false; break; }
+                    }
+                    if (!canPlace) break;
+                }
+                if (!canPlace) break;
             }
-            if (!exists) {
-                if (tileCount == tileCapacity) {
-                    tileCapacity = (tileCapacity == 0) ? 10 : tileCapacity * 2;
+
+            if (canPlace) {
+                if (tileCount + (size * size) > tileCapacity) {
+                    tileCapacity = (tileCapacity == 0) ? (size * size) : tileCapacity * 2;
+                    while (tileCount + (size * size) > tileCapacity) tileCapacity *= 2;
                     tiles = realloc(tiles, tileCapacity * sizeof(Tile));
                 }
-                tiles[tileCount++] = (Tile){ gridX, gridY, currentTexIndex, 0 };
+                for (int dx = 0; dx < size; dx++) {
+                    for (int dy = 0; dy < size; dy++) {
+                        tiles[tileCount++] = (Tile){ gridX + dx, gridY + dy, gridX, gridY, size, currentTexIndex, 0 };
+                    }
+                }
             }
         }
 
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+            int targetOriginX = -1, targetOriginY = -1, targetSize = -1;
             for (int i = 0; i < tileCount; i++) {
                 if (tiles[i].x == gridX && tiles[i].y == gridY) {
-                    tiles[i] = tiles[tileCount - 1];
-                    tileCount--;
+                    targetOriginX = tiles[i].originX;
+                    targetOriginY = tiles[i].originY;
+                    targetSize = tiles[i].size;
                     break;
+                }
+            }
+            if (targetSize != -1) {
+                for (int i = tileCount - 1; i >= 0; i--) {
+                    if (tiles[i].originX == targetOriginX && tiles[i].originY == targetOriginY && tiles[i].size == targetSize) {
+                        tiles[i] = tiles[tileCount - 1];
+                        tileCount--;
+                    }
                 }
             }
         }
@@ -166,16 +194,21 @@ int main(void) {
         }
 
         if (!mouseOverToolbar && currentTexIndex != -1) {
+            int size = currentTexIndex + 1;
             Texture2D tex = textures[currentTexIndex];
             Rectangle src = { 0, 0, (float)tex.width, (float)tex.height };
-            Rectangle dest = {
-                (float)gridX * tileSize + (tileSize / 2.0f),
-                (float)gridY * tileSize + (tileSize / 2.0f),
-                (float)tileSize,
-                (float)tileSize
-            };
             Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
-            DrawTexturePro(tex, src, dest, origin, 0.0f, Fade(WHITE, 0.5f));
+            for (int dx = 0; dx < size; dx++) {
+                for (int dy = 0; dy < size; dy++) {
+                    Rectangle dest = {
+                        (float)(gridX + dx) * tileSize + (tileSize / 2.0f),
+                        (float)(gridY + dy) * tileSize + (tileSize / 2.0f),
+                        (float)tileSize,
+                        (float)tileSize
+                    };
+                    DrawTexturePro(tex, src, dest, origin, 0.0f, Fade(WHITE, 0.5f));
+                }
+            }
         }
 
         EndMode2D();
