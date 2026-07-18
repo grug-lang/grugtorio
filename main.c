@@ -62,6 +62,7 @@ int main(void) {
     int tileCount = 0;
     int tileCapacity = 0;
     int currentTexIndex = -1;
+    int currentHeldRotation = 0;
 
     double last_time = get_time_ms();
     double accumulator = 0.0;
@@ -138,7 +139,7 @@ int main(void) {
             }
             for (int dx = 0; dx < size; dx++) {
                 for (int dy = 0; dy < size; dy++) {
-                    tiles[tileCount++] = (Tile){ gridX + dx, gridY + dy, gridX, gridY, size, currentTexIndex, 0 };
+                    tiles[tileCount++] = (Tile){ gridX + dx, gridY + dy, gridX, gridY, size, currentTexIndex, currentHeldRotation };
                 }
             }
         }
@@ -164,10 +165,14 @@ int main(void) {
         }
 
         if (IsKeyPressed(KEY_R)) {
-            for (int i = 0; i < tileCount; i++) {
-                if (tiles[i].x == gridX && tiles[i].y == gridY) {
-                    tiles[i].rotation = (tiles[i].rotation + 90) % 360;
-                    break;
+            if (currentTexIndex != -1) {
+                currentHeldRotation = (currentHeldRotation + 90) % 360;
+            } else {
+                for (int i = 0; i < tileCount; i++) {
+                    if (tiles[i].x == gridX && tiles[i].y == gridY) {
+                        tiles[i].rotation = (tiles[i].rotation + 90) % 360;
+                        break;
+                    }
                 }
             }
         }
@@ -230,7 +235,7 @@ int main(void) {
                         (float)tileSize,
                         (float)tileSize
                     };
-                    DrawTexturePro(tex, src, dest, origin, 0.0f, tint);
+                    DrawTexturePro(tex, src, dest, origin, (float)currentHeldRotation, tint);
                 }
             }
         }
