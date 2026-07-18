@@ -112,10 +112,10 @@ int main(void) {
         int gridY = (int)floorf(mouseWorld.y / tileSize);
 
         bool mouseOverToolbar = (GetMouseY() > screenHeight - 70);
+        bool canPlace = true;
 
-        if (!mouseOverToolbar && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && currentTexIndex != -1) {
+        if (currentTexIndex != -1) {
             int size = currentTexIndex + 1;
-            bool canPlace = true;
             for (int dx = 0; dx < size; dx++) {
                 for (int dy = 0; dy < size; dy++) {
                     int cx = gridX + dx;
@@ -127,17 +127,18 @@ int main(void) {
                 }
                 if (!canPlace) break;
             }
+        }
 
-            if (canPlace) {
-                if (tileCount + (size * size) > tileCapacity) {
-                    tileCapacity = (tileCapacity == 0) ? (size * size) : tileCapacity * 2;
-                    while (tileCount + (size * size) > tileCapacity) tileCapacity *= 2;
-                    tiles = realloc(tiles, tileCapacity * sizeof(Tile));
-                }
-                for (int dx = 0; dx < size; dx++) {
-                    for (int dy = 0; dy < size; dy++) {
-                        tiles[tileCount++] = (Tile){ gridX + dx, gridY + dy, gridX, gridY, size, currentTexIndex, 0 };
-                    }
+        if (!mouseOverToolbar && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && currentTexIndex != -1 && canPlace) {
+            int size = currentTexIndex + 1;
+            if (tileCount + (size * size) > tileCapacity) {
+                tileCapacity = (tileCapacity == 0) ? (size * size) : tileCapacity * 2;
+                while (tileCount + (size * size) > tileCapacity) tileCapacity *= 2;
+                tiles = realloc(tiles, tileCapacity * sizeof(Tile));
+            }
+            for (int dx = 0; dx < size; dx++) {
+                for (int dy = 0; dy < size; dy++) {
+                    tiles[tileCount++] = (Tile){ gridX + dx, gridY + dy, gridX, gridY, size, currentTexIndex, 0 };
                 }
             }
         }
@@ -220,6 +221,7 @@ int main(void) {
             Texture2D tex = textures[currentTexIndex];
             Rectangle src = { 0, 0, (float)tex.width, (float)tex.height };
             Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
+            Color tint = canPlace ? (Color){ 0, 255, 0, 128 } : (Color){ 255, 0, 0, 128 };
             for (int dx = 0; dx < size; dx++) {
                 for (int dy = 0; dy < size; dy++) {
                     Rectangle dest = {
@@ -228,7 +230,7 @@ int main(void) {
                         (float)tileSize,
                         (float)tileSize
                     };
-                    DrawTexturePro(tex, src, dest, origin, 0.0f, Fade(WHITE, 0.5f));
+                    DrawTexturePro(tex, src, dest, origin, 0.0f, tint);
                 }
             }
         }
