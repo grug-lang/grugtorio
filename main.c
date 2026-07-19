@@ -80,6 +80,30 @@ static int GetFeederRotation(Building* belt, Building* buildings, int buildingCo
     return -1;
 }
 
+static bool HasBeltFeedingFrom(int targetX, int targetY, int feederRot, Building* buildings, int count) {
+    if (!buildings) return false;
+    int dx = (int)roundf(sinf(feederRot * DEG2RAD));
+    int dy = (int)roundf(-cosf(feederRot * DEG2RAD));
+    int feederX = targetX - dx;
+    int feederY = targetY - dy;
+    for (int i = 0; i < count; i++) {
+        if (buildings[i].typeIdx == 1 && buildings[i].x == feederX && buildings[i].y == feederY && buildings[i].rotation == feederRot) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int GetBeltInputRotation(Building* belt, Building* buildings, int count) {
+    int rot = belt->rotation;
+    if (HasBeltFeedingFrom(belt->x, belt->y, rot, buildings, count)) return rot;
+    bool hasLeft = HasBeltFeedingFrom(belt->x, belt->y, (rot + 90) % 360, buildings, count);
+    bool hasRight = HasBeltFeedingFrom(belt->x, belt->y, (rot + 270) % 360, buildings, count);
+    if (hasLeft && !hasRight) return (rot + 90) % 360;
+    if (hasRight && !hasLeft) return (rot + 270) % 360;
+    return rot;
+}
+
 static int GetBeltLaneCapacity(Building* belt, int lane, Building* buildings, int buildingCount) {
     int feederRot = GetFeederRotation(belt, buildings, buildingCount);
     if (feederRot != -1) {
@@ -238,20 +262,6 @@ static void DrawKinkedChevron(Vector2 a, Vector2 c, float kinkOffset, float thic
     DrawLineEx(mid, c, thickness, color);
 }
 
-static bool HasBeltFeedingFrom(int targetX, int targetY, int feederRot, Building* buildings, int count) {
-    if (!buildings) return false;
-    int dx = (int)roundf(sinf(feederRot * DEG2RAD));
-    int dy = (int)roundf(-cosf(feederRot * DEG2RAD));
-    int feederX = targetX - dx;
-    int feederY = targetY - dy;
-    for (int i = 0; i < count; i++) {
-        if (buildings[i].typeIdx == 1 && buildings[i].x == feederX && buildings[i].y == feederY && buildings[i].rotation == feederRot) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static void DrawBuilding(int typeIdx, int originX, int originY, int size, int rotation, int tileSize, Color color, Building* buildings, int buildingCount, int progress, int outputType, bool drawOverlay) {
     Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
     for (int dx = 0; dx < size; dx++) {
@@ -284,20 +294,8 @@ static void DrawBuilding(int typeIdx, int originX, int originY, int size, int ro
             DrawCircleSector(buildingCenter, tileSize * 0.45f, -90.0f, -90.0f + ((float)progress / 120.0f * 360.0f), 32, (Color){ 100, 150, 200, 255 });
         }
     } else if (typeIdx == 1) {
-        int inputRot = rotation;
-        if (buildings) {
-            bool hasBack = HasBeltFeedingFrom(originX, originY, rotation, buildings, buildingCount);
-            if (!hasBack) {
-                bool hasLeft = HasBeltFeedingFrom(originX, originY, (rotation + 90) % 360, buildings, buildingCount);
-                bool hasRight = HasBeltFeedingFrom(originX, originY, (rotation + 270) % 360, buildings, buildingCount);
-                if (hasLeft && !hasRight) {
-                    inputRot = (rotation + 90) % 360;
-                } else if (hasRight && !hasLeft) {
-                    inputRot = (rotation + 270) % 360;
-                }
-            }
-        }
-
+        Building selfBelt = { .x = originX, .y = originY, .rotation = rotation };
+        int inputRot = GetBeltInputRotation(&selfBelt, buildings, buildingCount);
         Vector2 inDir = AngleToDir((float)inputRot);
         Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
         Vector2 startTip = { tileCenter.x - inDir.x * tileSize * 0.22f, tileCenter.y - inDir.y * tileSize * 0.22f };
@@ -531,19 +529,58 @@ int main(void) {
 
         for (int i = 0; i < buildingCount; i++) {
             if (buildings[i].typeIdx == 1) {
-                float px_base = (buildings[i].x + 0.5f) * tileSize;
-                float py_base = (buildings[i].y + 0.5f) * tileSize;
-                Vector2 dir = AngleToDir(buildings[i].rotation);
-                Vector2 right = { -dir.y, dir.x };
+                int inRot = GetBeltInputRotation(&buildings[i], buildings, buildingCount);
+                int outRot = buildings[i].rotation;
+                Vector2 tileCenter = { (buildings[i].x + 0.5f) * tileSize, (buildings[i].y + 0.5f) * tileSize };
+
                 for (int l = 0; l < 2; l++) {
                     float laneOffset = (l == 0) ? -0.25f : 0.25f;
                     for (int j = 0; j < 5; j++) {
                         float prog = buildings[i].belt_items[l][j];
                         if (prog >= 0.0f) {
-                            float pOffset = prog - 0.625f;
-                            float px = px_base + right.x * laneOffset * tileSize + dir.x * pOffset * tileSize;
-                            float py = py_base + right.y * laneOffset * tileSize + dir.y * pOffset * tileSize;
-                            DrawCircleV((Vector2){ px, py }, tileSize * 0.125f, GetItemColor(buildings[i].belt_item_types[l][j]));
+                            Vector2 pos;
+                            if (inRot == outRot) {
+                                Vector2 dir = AngleToDir(outRot);
+                                Vector2 right = { -dir.y, dir.x };
+                                float pOffset = prog - 0.625f;
+                                pos = (Vector2){ tileCenter.x + right.x * laneOffset * tileSize + dir.x * pOffset * tileSize, tileCenter.y + right.y * laneOffset * tileSize + dir.y * pOffset * tileSize };
+                            } else {
+                                int relRot = (outRot - inRot + 360) % 360;
+                                bool isClockwise = (relRot == 90);
+
+                                // Pivot = the tile corner shared by the entry edge and exit edge of the turn.
+                                // Indexed by inRot/90; the CCW pivot for a given inRot is always the CW
+                                // pivot for the *next* index around the tile.
+                                int idx = (inRot / 90) % 4;
+                                if (!isClockwise) idx = (idx + 1) % 4;
+                                static const float pivotXs[4] = { 1.0f, 0.0f, 0.0f, 1.0f }; // BR, BL, TL, TR
+                                static const float pivotYs[4] = { 1.0f, 1.0f, 0.0f, 0.0f };
+                                float pivotX = pivotXs[idx];
+                                float pivotY = pivotYs[idx];
+
+                                float r;
+                                if (isClockwise) r = (l == 1) ? 0.25f * tileSize : 0.75f * tileSize;
+                                else r = (l == 0) ? 0.25f * tileSize : 0.75f * tileSize;
+
+                                float startAngle, endAngle;
+                                if (isClockwise) {
+                                    startAngle = (inRot == 0) ? 180.0f : (inRot == 90) ? 270.0f : (inRot == 180) ? 0.0f : 90.0f;
+                                    endAngle = startAngle + 90.0f;
+                                } else {
+                                    startAngle = (inRot == 0) ? 0.0f : (inRot == 270) ? 90.0f : (inRot == 180) ? 180.0f : 270.0f;
+                                    endAngle = startAngle - 90.0f;
+                                }
+
+                                // prog=0 is exactly the entry corner, prog=1 is exactly the exit corner —
+                                // guaranteed continuous with the previous/next tile's own boundary
+                                // positions, with no clamping or dead zones.
+                                float a = startAngle + (endAngle - startAngle) * prog;
+
+                                Vector2 tileTopLeft = { (float)buildings[i].x * tileSize, (float)buildings[i].y * tileSize };
+                                pos = (Vector2){ (tileTopLeft.x + pivotX * tileSize) + cosf(a * DEG2RAD) * r,
+                                                (tileTopLeft.y + pivotY * tileSize) + sinf(a * DEG2RAD) * r };
+                            }
+                            DrawCircleV(pos, tileSize * 0.125f, GetItemColor(buildings[i].belt_item_types[l][j]));
                         }
                     }
                 }
