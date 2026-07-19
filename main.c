@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define UPS 60.0
 #define UPDATE_DT_MS (1000.0 / UPS)
@@ -40,12 +41,21 @@ typedef struct {
     int rotation;
     int progress;
     float belt_items[2][4];
+    int belt_item_types[2][4];
+    int outputType;
 } Building;
 
 typedef struct {
     float x;
     float y;
+    int type;
 } Item;
+
+static Color GetItemColor(int type) {
+    if (type == 0) return (Color){ 100, 150, 200, 255 };
+    if (type == 1) return (Color){ 50, 50, 50, 255 };
+    return (Color){ 200, 150, 100, 255 };
+}
 
 static double get_time_ms() {
     struct timespec ts;
@@ -118,8 +128,10 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
 
                         if (canInsert) {
                             buildings[targetBeltIdx].belt_items[targetLane][lastItemIdx + 1] = 0.0f;
+                            buildings[targetBeltIdx].belt_item_types[targetLane][lastItemIdx + 1] = buildings[i].belt_item_types[l][0];
                             for (int j = 0; j < 3; j++) {
                                 buildings[i].belt_items[l][j] = buildings[i].belt_items[l][j + 1];
+                                buildings[i].belt_item_types[l][j] = buildings[i].belt_item_types[l][j + 1];
                             }
                             buildings[i].belt_items[l][3] = -1.0f;
                         }
@@ -173,6 +185,7 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
                         int lastItemIdx = -1;
                         for (int j = 0; j < 4; j++) if (buildings[targetBeltIdx].belt_items[l][j] >= 0.0f) lastItemIdx = j;
                         buildings[targetBeltIdx].belt_items[l][lastItemIdx + 1] = 0.0f;
+                        buildings[targetBeltIdx].belt_item_types[l][lastItemIdx + 1] = buildings[i].outputType;
                     } else {
                         float itemX = (tx + 0.5f - (float)dirX * 0.152f) * tileSize;
                         float itemY = (ty + 0.5f - (float)dirY * 0.152f) * tileSize;
@@ -180,7 +193,7 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
                             *itemCapacity = (*itemCapacity == 0) ? 64 : *itemCapacity * 2;
                             *items = realloc(*items, *itemCapacity * sizeof(Item));
                         }
-                        (*items)[(*itemCount)++] = (Item){ itemX, itemY };
+                        (*items)[(*itemCount)++] = (Item){ itemX, itemY, buildings[i].outputType };
                     }
                     buildings[i].progress = 0;
                 }
@@ -231,7 +244,7 @@ static bool HasBeltFeedingFrom(int targetX, int targetY, int feederRot, Building
     return false;
 }
 
-static void DrawBuilding(int typeIdx, int originX, int originY, int size, int rotation, int tileSize, Color color, Building* buildings, int buildingCount, int progress) {
+static void DrawBuilding(int typeIdx, int originX, int originY, int size, int rotation, int tileSize, Color color, Building* buildings, int buildingCount, int progress, int outputType, bool drawOverlay) {
     Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
     for (int dx = 0; dx < size; dx++) {
         for (int dy = 0; dy < size; dy++) {
@@ -256,7 +269,12 @@ static void DrawBuilding(int typeIdx, int originX, int originY, int size, int ro
         Vector2 tip = { buildingCenter.x + dir.x * tileSize, buildingCenter.y + dir.y * tileSize };
         DrawChevron(tip, tileSize * 0.18f, (float)rotation, 35.0f, 2.0f, chevronColor);
         DrawCircleV(buildingCenter, tileSize * 0.5f, (Color){ 30, 30, 30, 255 });
-        DrawCircleSector(buildingCenter, tileSize * 0.45f, -90.0f, -90.0f + ((float)progress / 120.0f * 360.0f), 32, (Color){ 100, 150, 200, 255 });
+
+        if (drawOverlay) {
+            DrawCircleV(buildingCenter, tileSize * 0.45f, GetItemColor(outputType));
+        } else {
+            DrawCircleSector(buildingCenter, tileSize * 0.45f, -90.0f, -90.0f + ((float)progress / 120.0f * 360.0f), 32, (Color){ 100, 150, 200, 255 });
+        }
     } else if (typeIdx == 1) {
         int inputRot = rotation;
         if (buildings) {
@@ -282,7 +300,7 @@ static void DrawBuilding(int typeIdx, int originX, int originY, int size, int ro
     } else if (typeIdx == 2) {
         Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
         Vector2 edgePoint = { tileCenter.x + dir.x * tileSize * 0.5f, tileCenter.y + dir.y * tileSize * 0.5f };
-        DrawKinkedChevron(tileCenter, edgePoint, tileSize * 0.12f, 3.0f, chevronColor);
+        DrawKinkedChevron(tileCenter, edgePoint, tileSize * 0.125f, 3.0f, chevronColor);
     }
 }
 
@@ -308,6 +326,7 @@ int main(void) {
     int buildingCapacity = 0;
     int currentBuildingIdx = -1;
     int currentHeldRotation = 0;
+    int currentDrillOutputMode = 0;
 
     Item* items = NULL;
     int itemCount = 0;
@@ -338,6 +357,10 @@ int main(void) {
 
         for (int i = 0; i < 9; i++) if (IsKeyPressed(KEY_ONE + i) && BUILDING_TYPES[i].name != NULL) currentBuildingIdx = i;
         if (IsKeyPressed(KEY_ZERO) && BUILDING_TYPES[9].name != NULL) currentBuildingIdx = 9;
+        
+        if (IsKeyPressed(KEY_O)) {
+            currentDrillOutputMode = (currentDrillOutputMode + 1) % 3;
+        }
 
         float moveSpeed = 500.0f / camera.zoom * dt;
         if (IsKeyDown(KEY_W)) camera.target.y -= moveSpeed;
@@ -402,6 +425,7 @@ int main(void) {
                     newB.size = size;
                     newB.typeIdx = currentBuildingIdx;
                     newB.rotation = currentHeldRotation;
+                    newB.outputType = currentDrillOutputMode;
                     for(int l=0; l<2; l++) for(int j=0; j<4; j++) newB.belt_items[l][j] = -1.0f;
                     buildings[buildingCount++] = newB;
                 }
@@ -481,7 +505,7 @@ int main(void) {
 
         for (int i = 0; i < buildingCount; i++) {
             if (buildings[i].x != buildings[i].originX || buildings[i].y != buildings[i].originY) continue;
-            DrawBuilding(buildings[i].typeIdx, buildings[i].originX, buildings[i].originY, buildings[i].size, buildings[i].rotation, tileSize, BUILDING_TYPES[buildings[i].typeIdx].color, buildings, buildingCount, buildings[i].progress);
+            DrawBuilding(buildings[i].typeIdx, buildings[i].originX, buildings[i].originY, buildings[i].size, buildings[i].rotation, tileSize, BUILDING_TYPES[buildings[i].typeIdx].color, buildings, buildingCount, buildings[i].progress, buildings[i].outputType, false);
         }
 
         for (int i = 0; i < buildingCount; i++) {
@@ -498,7 +522,7 @@ int main(void) {
                             float pOffset = prog - 0.5f;
                             float px = px_base + right.x * laneOffset * tileSize + dir.x * pOffset * tileSize;
                             float py = py_base + right.y * laneOffset * tileSize + dir.y * pOffset * tileSize;
-                            DrawCircleV((Vector2){ px, py }, tileSize * 0.125f, (Color){ 100, 150, 200, 255 });
+                            DrawCircleV((Vector2){ px, py }, tileSize * 0.125f, GetItemColor(buildings[i].belt_item_types[l][j]));
                         }
                     }
                 }
@@ -506,13 +530,13 @@ int main(void) {
         }
 
         for (int i = 0; i < itemCount; i++) {
-            DrawCircleV((Vector2){ items[i].x, items[i].y }, tileSize * 0.125f, (Color){ 100, 150, 200, 255 });
+            DrawCircleV((Vector2){ items[i].x, items[i].y }, tileSize * 0.125f, GetItemColor(items[i].type));
         }
 
         if (!mouseOverToolbar && currentBuildingIdx != -1) {
             Color base = BUILDING_TYPES[currentBuildingIdx].color;
             Color tint = canPlace ? (Color){ base.r, base.g, base.b, 150 } : (Color){ 255, 0, 0, 150 };
-            DrawBuilding(currentBuildingIdx, originX, originY, BUILDING_TYPES[currentBuildingIdx].size, currentHeldRotation, tileSize, tint, buildings, buildingCount, 0);
+            DrawBuilding(currentBuildingIdx, originX, originY, BUILDING_TYPES[currentBuildingIdx].size, currentHeldRotation, tileSize, tint, buildings, buildingCount, 0, currentDrillOutputMode, true);
         }
 
         EndMode2D();
