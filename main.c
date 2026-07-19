@@ -239,7 +239,7 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
                     int relRot = (buildings[targetBeltIdx].rotation - buildings[i].rotation + 360) % 360;
                     int l = (relRot == ROT_CCW) ? 0 : 1;
 
-                    float insertProgress = (relRot == 0) ? 0.0f : 0.5f;
+                    float insertProgress = (relRot == 0) ? 0.25f : 0.5f;
 
                     int capacity = GetBeltLaneCapacity(&buildings[targetBeltIdx], l, buildings, buildingCount);
                     int lastItemIdx = -1;
