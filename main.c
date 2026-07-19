@@ -350,7 +350,6 @@ static bool RemoveItemAtCursor(Vector2 mouseWorld, Item* items, int* itemCount, 
         float dy = items[i].y - mouseWorld.y;
 
         if (dx * dx + dy * dy <= pickupRadius * pickupRadius) {
-            // Remove item by replacing it with the last item
             items[i] = items[*itemCount - 1];
             (*itemCount)--;
 
@@ -366,7 +365,6 @@ static bool RemoveBuildingAtCursor(int gridX, int gridY, Building* buildings, in
     int targetOriginY = -1;
     int targetSize = -1;
 
-    // Find the building tile under the cursor
     for (int i = 0; i < *buildingCount; i++) {
         if (buildings[i].x == gridX && buildings[i].y == gridY) {
             targetOriginX = buildings[i].originX;
@@ -380,7 +378,6 @@ static bool RemoveBuildingAtCursor(int gridX, int gridY, Building* buildings, in
         return false;
     }
 
-    // Remove every tile belonging to the building
     for (int i = *buildingCount - 1; i >= 0; i--) {
         if (buildings[i].originX == targetOriginX &&
             buildings[i].originY == targetOriginY &&
@@ -618,12 +615,9 @@ int main(void) {
                                 int relRot = (outRot - inRot + 360) % 360;
                                 bool isClockwise = (relRot == ROT_CW);
 
-                                // Pivot = the tile corner shared by the entry edge and exit edge of the turn.
-                                // Indexed by inRot/90; the CCW pivot for a given inRot is always the CW
-                                // pivot for the *next* index around the tile.
                                 int idx = (inRot / 90) % 4;
                                 if (!isClockwise) idx = (idx + 1) % 4;
-                                static const float pivotXs[4] = { 1.0f, 0.0f, 0.0f, 1.0f }; // BR, BL, TL, TR
+                                static const float pivotXs[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
                                 static const float pivotYs[4] = { 1.0f, 1.0f, 0.0f, 0.0f };
                                 float pivotX = pivotXs[idx];
                                 float pivotY = pivotYs[idx];
@@ -641,9 +635,6 @@ int main(void) {
                                     endAngle = startAngle - 90.0f;
                                 }
 
-                                // prog=0 is exactly the entry corner, prog=1 is exactly the exit corner —
-                                // guaranteed continuous with the previous/next tile's own boundary
-                                // positions, with no clamping or dead zones.
                                 float a = startAngle + (endAngle - startAngle) * prog;
 
                                 Vector2 tileTopLeft = { (float)buildings[i].x * tileSize, (float)buildings[i].y * tileSize };
