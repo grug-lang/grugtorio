@@ -540,7 +540,7 @@ int main(void) {
                     for (int j = 0; j < 5; j++) {
                         float prog = buildings[i].belt_items[l][j];
                         if (prog >= 0.0f) {
-                            float pOffset = prog - 0.5f;
+                            float pOffset = prog - 0.625f;
                             float px = px_base + right.x * laneOffset * tileSize + dir.x * pOffset * tileSize;
                             float py = py_base + right.y * laneOffset * tileSize + dir.y * pOffset * tileSize;
                             DrawCircleV((Vector2){ px, py }, tileSize * 0.125f, GetItemColor(buildings[i].belt_item_types[l][j]));
