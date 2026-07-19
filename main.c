@@ -168,8 +168,8 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
                     }
                 } else {
                     buildings[i].progress = 0;
-                    float itemX = tx * tileSize + tileSize / 2.0f;
-                    float itemY = ty * tileSize + tileSize / 2.0f;
+                    float itemX = (tx + 0.5f - (float)dirX * 0.152f) * tileSize;
+                    float itemY = (ty + 0.5f - (float)dirY * 0.152f) * tileSize;
 
                     if (*itemCount >= *itemCapacity) {
                         *itemCapacity = (*itemCapacity == 0) ? 64 : *itemCapacity * 2;
