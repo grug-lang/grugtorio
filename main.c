@@ -2,7 +2,6 @@
 #include "raylib.h"
 
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -48,6 +47,34 @@ static double get_time_ms() {
 
 static void game_logic_tick(void) {
     // printf("tick\n");
+}
+
+static Vector2 AngleToDir(float angleDeg) {
+    float rad = angleDeg * DEG2RAD;
+    return (Vector2){ sinf(rad), -cosf(rad) };
+}
+
+static void DrawChevron(Vector2 tip, float armLength, float angleDeg, float spreadDeg, float thickness, Color color) {
+    float backAngle = angleDeg + 180.0f;
+    Vector2 arm1 = AngleToDir(backAngle - spreadDeg);
+    Vector2 arm2 = AngleToDir(backAngle + spreadDeg);
+    Vector2 p1 = { tip.x + arm1.x * armLength, tip.y + arm1.y * armLength };
+    Vector2 p2 = { tip.x + arm2.x * armLength, tip.y + arm2.y * armLength };
+    DrawLineEx(tip, p1, thickness, color);
+    DrawLineEx(tip, p2, thickness, color);
+}
+
+static void DrawKinkedChevron(Vector2 a, Vector2 c, float kinkOffset, float thickness, Color color) {
+    Vector2 d = { c.x - a.x, c.y - a.y };
+    Vector2 perp = { -d.y, d.x };
+    float len = sqrtf(perp.x * perp.x + perp.y * perp.y);
+    if (len > 0.0f) {
+        perp.x /= len;
+        perp.y /= len;
+    }
+    Vector2 mid = { (a.x + c.x) / 2.0f + perp.x * kinkOffset, (a.y + c.y) / 2.0f + perp.y * kinkOffset };
+    DrawLineEx(a, mid, thickness, color);
+    DrawLineEx(mid, c, thickness, color);
 }
 
 int main(void) {
@@ -225,6 +252,32 @@ int main(void) {
             Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
 
             DrawRectanglePro(dest, origin, (float)tiles[i].rotation, TILE_TYPES[tiles[i].texIdx].color);
+        }
+
+        for (int i = 0; i < tileCount; i++) {
+            if (tiles[i].x != tiles[i].originX || tiles[i].y != tiles[i].originY) continue;
+
+            Vector2 dir = AngleToDir((float)tiles[i].rotation);
+            float originPxX = (float)tiles[i].originX * tileSize;
+            float originPxY = (float)tiles[i].originY * tileSize;
+            float sizePx = (float)tiles[i].size * tileSize;
+            Vector2 buildingCenter = { originPxX + sizePx / 2.0f, originPxY + sizePx / 2.0f };
+            Color chevronColor = (Color){ 20, 20, 20, 220 };
+
+            if (tiles[i].texIdx == 0) {
+                Vector2 tip = { buildingCenter.x + dir.x * tileSize, buildingCenter.y + dir.y * tileSize };
+                DrawChevron(tip, tileSize * 0.18f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
+            } else if (tiles[i].texIdx == 1) {
+                Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
+                Vector2 startTip = { tileCenter.x - dir.x * tileSize * 0.22f, tileCenter.y - dir.y * tileSize * 0.22f };
+                Vector2 endTip = { tileCenter.x + dir.x * tileSize * 0.22f, tileCenter.y + dir.y * tileSize * 0.22f };
+                DrawChevron(startTip, tileSize * 0.14f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
+                DrawChevron(endTip, tileSize * 0.14f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
+            } else if (tiles[i].texIdx == 2) {
+                Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
+                Vector2 edgePoint = { tileCenter.x + dir.x * tileSize * 0.5f, tileCenter.y + dir.y * tileSize * 0.5f };
+                DrawKinkedChevron(tileCenter, edgePoint, tileSize * 0.12f, 3.0f, chevronColor);
+            }
         }
 
         if (!mouseOverToolbar && currentTexIndex != -1) {
