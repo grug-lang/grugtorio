@@ -113,7 +113,7 @@ static double get_time_ms() {
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
 }
 
-void SaveWorld(const char* path, Building* buildings, int buildingCount) {
+void SaveWorld(const char* path, Building* buildings, int buildingCount, Item* items, int itemCount) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "version", 1);
 
@@ -150,6 +150,16 @@ void SaveWorld(const char* path, Building* buildings, int buildingCount) {
     }
     cJSON_AddItemToObject(root, "buildings", bArray);
 
+    cJSON *itemArray = cJSON_CreateArray();
+    for (int i = 0; i < itemCount; i++) {
+        cJSON *itemObj = cJSON_CreateObject();
+        cJSON_AddNumberToObject(itemObj, "x", (double)items[i].x);
+        cJSON_AddNumberToObject(itemObj, "y", (double)items[i].y);
+        cJSON_AddNumberToObject(itemObj, "type", items[i].type);
+        cJSON_AddItemToArray(itemArray, itemObj);
+    }
+    cJSON_AddItemToObject(root, "items", itemArray);
+
     char *out = cJSON_Print(root);
     FILE *f = fopen(path, "w");
     if (f) {
@@ -160,7 +170,7 @@ void SaveWorld(const char* path, Building* buildings, int buildingCount) {
     cJSON_Delete(root);
 }
 
-void LoadWorld(const char* path, Building** buildings, int* buildingCount, int* buildingCapacity) {
+void LoadWorld(const char* path, Building** buildings, int* buildingCount, int* buildingCapacity, Item** items, int* itemCount, int* itemCapacity) {
     FILE *f = fopen(path, "r");
     if (!f) return;
 
@@ -206,6 +216,20 @@ void LoadWorld(const char* path, Building** buildings, int* buildingCount, int* 
             for (int j = 0; j < 5; j++) {
                 (*buildings)[i].belt_item_types[l][j] = cJSON_GetArrayItem(typesArray, l * 5 + j)->valueint;
             }
+        }
+    }
+
+    cJSON *itemArray = cJSON_GetObjectItem(root, "items");
+    if (itemArray) {
+        int count = cJSON_GetArraySize(itemArray);
+        *itemCount = count;
+        *itemCapacity = count;
+        *items = realloc(*items, sizeof(Item) * (*itemCapacity));
+        for (int i = 0; i < count; i++) {
+            cJSON *itemObj = cJSON_GetArrayItem(itemArray, i);
+            (*items)[i].x = (float)cJSON_GetObjectItem(itemObj, "x")->valuedouble;
+            (*items)[i].y = (float)cJSON_GetObjectItem(itemObj, "y")->valuedouble;
+            (*items)[i].type = cJSON_GetObjectItem(itemObj, "type")->valueint;
         }
     }
 
@@ -530,7 +554,7 @@ int main(int argc, char** argv) {
     int run_ticks = -1;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--input-save") == 0 && i + 1 < argc) {
-            LoadWorld(argv[++i], &buildings, &buildingCount, &buildingCapacity);
+            LoadWorld(argv[++i], &buildings, &buildingCount, &buildingCapacity, &items, &itemCount, &itemCapacity);
         } else if (strcmp(argv[i], "--output-save") == 0 && i + 1 < argc) {
             output_save_path = argv[++i];
         } else if (strcmp(argv[i], "--ticks") == 0 && i + 1 < argc) {
@@ -542,7 +566,7 @@ int main(int argc, char** argv) {
         for (int t = 0; t < run_ticks; t++) {
             game_logic_tick(buildings, buildingCount, &items, &itemCount, &itemCapacity, tileSize);
         }
-        if (output_save_path) SaveWorld(output_save_path, buildings, buildingCount);
+        if (output_save_path) SaveWorld(output_save_path, buildings, buildingCount, items, itemCount);
         return 0;
     }
 
@@ -847,7 +871,7 @@ int main(int argc, char** argv) {
     }
 
     if (output_save_path != NULL) {
-        SaveWorld(output_save_path, buildings, buildingCount);
+        SaveWorld(output_save_path, buildings, buildingCount, items, itemCount);
     }
 
     free(buildings);
