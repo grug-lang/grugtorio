@@ -422,6 +422,7 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
                         buildings[i].progress = 0;
                     }
                 } else {
+                    bool building_collision = is_tile_occupied(tx, ty, buildings, building_count);
                     bool item_collision = false;
                     for (int k = 0; k < *item_count; k++) {
                         if ((int)floorf((*items)[k].x / tile_size) == tx && (int)floorf((*items)[k].y / tile_size) == ty) {
@@ -429,7 +430,7 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
                         }
                     }
 
-                    if (!item_collision) {
+                    if (!item_collision && !building_collision) {
                         float item_x = (tx + 0.5f - (float)dir_x * 0.152f) * tile_size;
                         float item_y = (ty + 0.5f - (float)dir_y * 0.152f) * tile_size;
                         if (*item_count >= *item_capacity) {
