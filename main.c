@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 #define UPS 60.0
 #define UPDATE_DT_MS (1000.0 / UPS)
@@ -37,7 +38,14 @@ typedef struct {
     int size;
     int typeIdx;
     int rotation;
+    int progress;
+    float belt_items[2][4];
 } Building;
+
+typedef struct {
+    float x;
+    float y;
+} Item;
 
 static double get_time_ms() {
     struct timespec ts;
@@ -45,7 +53,133 @@ static double get_time_ms() {
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
 }
 
-static void game_logic_tick(void) {
+static void game_logic_tick(Building* buildings, int buildingCount, Item** items, int* itemCount, int* itemCapacity, int tileSize) {
+    for (int i = 0; i < buildingCount; i++) {
+        if (buildings[i].typeIdx == 1) {
+            for (int l = 0; l < 2; l++) {
+                for (int j = 0; j < 4; j++) {
+                    if (buildings[i].belt_items[l][j] >= 0.0f) {
+                        float max_p = 1.0f;
+                        if (j > 0 && buildings[i].belt_items[l][j - 1] >= 0.0f) {
+                            max_p = buildings[i].belt_items[l][j - 1] - 0.25f;
+                        }
+                        buildings[i].belt_items[l][j] += 1.0f / UPS;
+                        if (buildings[i].belt_items[l][j] > max_p) {
+                            buildings[i].belt_items[l][j] = max_p;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < buildingCount; i++) {
+        if (buildings[i].typeIdx == 1) {
+            for (int l = 0; l < 2; l++) {
+                if (buildings[i].belt_items[l][0] >= 1.0f) {
+                    int dirX = (int)roundf(sinf(buildings[i].rotation * DEG2RAD));
+                    int dirY = (int)roundf(-cosf(buildings[i].rotation * DEG2RAD));
+                    int tx = buildings[i].x + dirX;
+                    int ty = buildings[i].y + dirY;
+
+                    int targetBeltIdx = -1;
+                    for (int k = 0; k < buildingCount; k++) {
+                        if (buildings[k].typeIdx == 1 && buildings[k].x == tx && buildings[k].y == ty) {
+                            targetBeltIdx = k;
+                            break;
+                        }
+                    }
+
+                    if (targetBeltIdx != -1) {
+                        int targetRot = buildings[targetBeltIdx].rotation;
+                        int myRot = buildings[i].rotation;
+                        int relRot = (targetRot - myRot + 360) % 360;
+
+                        int targetLane = l;
+                        if (relRot == 90) {
+                            targetLane = 1;
+                        } else if (relRot == 270) {
+                            targetLane = 0;
+                        }
+
+                        int lastItemIdx = -1;
+                        for (int j = 0; j < 4; j++) {
+                            if (buildings[targetBeltIdx].belt_items[targetLane][j] >= 0.0f) {
+                                lastItemIdx = j;
+                            }
+                        }
+
+                        bool canInsert = false;
+                        if (lastItemIdx == -1) {
+                            canInsert = true;
+                        } else if (lastItemIdx < 3 && buildings[targetBeltIdx].belt_items[targetLane][lastItemIdx] >= 0.25f) {
+                            canInsert = true;
+                        }
+
+                        if (canInsert) {
+                            buildings[targetBeltIdx].belt_items[targetLane][lastItemIdx + 1] = 0.0f;
+                            for (int j = 0; j < 3; j++) {
+                                buildings[i].belt_items[l][j] = buildings[i].belt_items[l][j + 1];
+                            }
+                            buildings[i].belt_items[l][3] = -1.0f;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < buildingCount; i++) {
+        if (buildings[i].typeIdx == 0 && buildings[i].x == buildings[i].originX && buildings[i].y == buildings[i].originY) {
+            buildings[i].progress++;
+            if (buildings[i].progress >= 120) {
+                int dirX = (int)roundf(sinf(buildings[i].rotation * DEG2RAD));
+                int dirY = (int)roundf(-cosf(buildings[i].rotation * DEG2RAD));
+                int tx = buildings[i].originX + 1 + dirX * 2;
+                int ty = buildings[i].originY + 1 + dirY * 2;
+
+                int targetBeltIdx = -1;
+                for (int j = 0; j < buildingCount; j++) {
+                    if (buildings[j].typeIdx == 1 && buildings[j].x == tx && buildings[j].y == ty) {
+                        targetBeltIdx = j;
+                        break;
+                    }
+                }
+
+                if (targetBeltIdx != -1) {
+                    int l = 1;
+                    int lastItemIdx = -1;
+                    for (int j = 0; j < 4; j++) {
+                        if (buildings[targetBeltIdx].belt_items[l][j] >= 0.0f) {
+                            lastItemIdx = j;
+                        }
+                    }
+
+                    bool canInsert = false;
+                    if (lastItemIdx == -1) {
+                        canInsert = true;
+                    } else if (lastItemIdx < 3 && buildings[targetBeltIdx].belt_items[l][lastItemIdx] >= 0.25f) {
+                        canInsert = true;
+                    }
+
+                    if (canInsert) {
+                        buildings[targetBeltIdx].belt_items[l][lastItemIdx + 1] = 0.0f;
+                        buildings[i].progress = 0;
+                    }
+                } else {
+                    buildings[i].progress = 0;
+                    float itemX = tx * tileSize + tileSize / 2.0f;
+                    float itemY = ty * tileSize + tileSize / 2.0f;
+
+                    if (*itemCount >= *itemCapacity) {
+                        *itemCapacity = (*itemCapacity == 0) ? 64 : *itemCapacity * 2;
+                        *items = realloc(*items, *itemCapacity * sizeof(Item));
+                    }
+                    (*items)[(*itemCount)++] = (Item){ itemX, itemY };
+                }
+            }
+        }
+    }
 }
 
 static Vector2 AngleToDir(float angleDeg) {
@@ -166,6 +300,10 @@ int main(void) {
     int currentBuildingIdx = -1;
     int currentHeldRotation = 0;
 
+    Item* items = NULL;
+    int itemCount = 0;
+    int itemCapacity = 0;
+
     double last_time = get_time_ms();
     double accumulator = 0.0;
 
@@ -180,7 +318,7 @@ int main(void) {
 
         int ticks_this_frame = 0;
         while (accumulator >= UPDATE_DT_MS) {
-            game_logic_tick();
+            game_logic_tick(buildings, buildingCount, &items, &itemCount, &itemCapacity, tileSize);
             accumulator -= UPDATE_DT_MS;
             ticks_this_frame++;
             if (ticks_this_frame >= MAX_TICKS_PER_FRAME) {
@@ -246,7 +384,17 @@ int main(void) {
             }
             for (int dx = 0; dx < size; dx++) {
                 for (int dy = 0; dy < size; dy++) {
-                    buildings[buildingCount++] = (Building){ originX + dx, originY + dy, originX, originY, size, currentBuildingIdx, currentHeldRotation };
+                    Building newB;
+                    memset(&newB, 0, sizeof(Building));
+                    newB.x = originX + dx;
+                    newB.y = originY + dy;
+                    newB.originX = originX;
+                    newB.originY = originY;
+                    newB.size = size;
+                    newB.typeIdx = currentBuildingIdx;
+                    newB.rotation = currentHeldRotation;
+                    for(int l=0; l<2; l++) for(int j=0; j<4; j++) newB.belt_items[l][j] = -1.0f;
+                    buildings[buildingCount++] = newB;
                 }
             }
         }
@@ -327,6 +475,31 @@ int main(void) {
             DrawBuilding(buildings[i].typeIdx, buildings[i].originX, buildings[i].originY, buildings[i].size, buildings[i].rotation, tileSize, BUILDING_TYPES[buildings[i].typeIdx].color, buildings, buildingCount);
         }
 
+        for (int i = 0; i < buildingCount; i++) {
+            if (buildings[i].typeIdx == 1) {
+                float px_base = (buildings[i].x + 0.5f) * tileSize;
+                float py_base = (buildings[i].y + 0.5f) * tileSize;
+                Vector2 dir = AngleToDir(buildings[i].rotation);
+                Vector2 right = { -dir.y, dir.x };
+                for (int l = 0; l < 2; l++) {
+                    float laneOffset = (l == 0) ? -0.25f : 0.25f;
+                    for (int j = 0; j < 4; j++) {
+                        float prog = buildings[i].belt_items[l][j];
+                        if (prog >= 0.0f) {
+                            float pOffset = prog - 0.5f;
+                            float px = px_base + right.x * laneOffset * tileSize + dir.x * pOffset * tileSize;
+                            float py = py_base + right.y * laneOffset * tileSize + dir.y * pOffset * tileSize;
+                            DrawCircleV((Vector2){ px, py }, tileSize * 0.125f, (Color){ 30, 30, 30, 255 });
+                        }
+                    }
+                }
+            }
+        }
+
+        for (int i = 0; i < itemCount; i++) {
+            DrawCircleV((Vector2){ items[i].x, items[i].y }, tileSize * 0.125f, (Color){ 30, 30, 30, 255 });
+        }
+
         if (!mouseOverToolbar && currentBuildingIdx != -1) {
             Color base = BUILDING_TYPES[currentBuildingIdx].color;
             Color tint = canPlace ? (Color){ base.r, base.g, base.b, 150 } : (Color){ 255, 0, 0, 150 };
@@ -371,5 +544,6 @@ int main(void) {
     }
 
     free(buildings);
+    free(items);
     CloseWindow();
 }
