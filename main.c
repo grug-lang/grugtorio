@@ -91,6 +91,22 @@ static Color GetItemColor(ItemTypeEnum type) {
     abort();
 }
 
+static bool IsTileOccupied(int x, int y, Building* buildings, int count)
+{
+    for (int i = 0; i < count; i++) {
+        Building* b = &buildings[i];
+
+        if (x >= b->originX &&
+            x < b->originX + b->size &&
+            y >= b->originY &&
+            y < b->originY + b->size) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static double get_time_ms() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -113,7 +129,7 @@ void SaveWorld(const char* path, Building* buildings, int buildingCount) {
         cJSON_AddNumberToObject(bObj, "rotation", buildings[i].rotation);
         cJSON_AddNumberToObject(bObj, "progress", buildings[i].progress);
         cJSON_AddNumberToObject(bObj, "outputType", buildings[i].outputType);
-        
+
         cJSON *itemsArray = cJSON_CreateArray();
         for (int l = 0; l < 2; l++) {
             for (int j = 0; j < 5; j++) {
@@ -147,7 +163,7 @@ void SaveWorld(const char* path, Building* buildings, int buildingCount) {
 void LoadWorld(const char* path, Building** buildings, int* buildingCount, int* buildingCapacity) {
     FILE *f = fopen(path, "r");
     if (!f) return;
-    
+
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -161,7 +177,7 @@ void LoadWorld(const char* path, Building** buildings, int* buildingCount, int* 
 
     cJSON *bArray = cJSON_GetObjectItem(root, "buildings");
     int count = cJSON_GetArraySize(bArray);
-    
+
     *buildingCount = count;
     *buildingCapacity = count;
     *buildings = realloc(*buildings, sizeof(Building) * (*buildingCapacity));
@@ -321,13 +337,16 @@ static void game_logic_tick(Building* buildings, int buildingCount, Item** items
     }
 
     for (int i = 0; i < buildingCount; i++) {
-        if (buildings[i].typeIdx == BUILDING_MINING_DRILL && buildings[i].x == buildings[i].originX && buildings[i].y == buildings[i].originY) {
+        if (buildings[i].typeIdx == BUILDING_MINING_DRILL) {
             if (buildings[i].progress < 120) buildings[i].progress++;
             if (buildings[i].progress >= 120) {
                 int dirX = (int)roundf(sinf(buildings[i].rotation * DEG2RAD));
                 int dirY = (int)roundf(-cosf(buildings[i].rotation * DEG2RAD));
-                int tx = buildings[i].originX + 1 + dirX * 2;
-                int ty = buildings[i].originY + 1 + dirY * 2;
+                int centerX = buildings[i].originX + buildings[i].size / 2;
+                int centerY = buildings[i].originY + buildings[i].size / 2;
+
+                int tx = centerX + dirX * 2;
+                int ty = centerY + dirY * 2;
 
                 int targetBeltIdx = -1;
                 for (int j = 0; j < buildingCount; j++) {
@@ -471,35 +490,28 @@ static bool RemoveItemAtCursor(Vector2 mouseWorld, Item* items, int* itemCount, 
     return false;
 }
 
-static bool RemoveBuildingAtCursor(int gridX, int gridY, Building* buildings, int* buildingCount) {
-    int targetOriginX = -1;
-    int targetOriginY = -1;
-    int targetSize = -1;
-
+static bool RemoveBuildingAtCursor(
+    int gridX,
+    int gridY,
+    Building* buildings,
+    int* buildingCount)
+{
     for (int i = 0; i < *buildingCount; i++) {
-        if (buildings[i].x == gridX && buildings[i].y == gridY) {
-            targetOriginX = buildings[i].originX;
-            targetOriginY = buildings[i].originY;
-            targetSize = buildings[i].size;
-            break;
-        }
-    }
 
-    if (targetSize == -1) {
-        return false;
-    }
+        Building* b = &buildings[i];
 
-    for (int i = *buildingCount - 1; i >= 0; i--) {
-        if (buildings[i].originX == targetOriginX &&
-            buildings[i].originY == targetOriginY &&
-            buildings[i].size == targetSize) {
-
+        if (gridX >= b->originX &&
+            gridX < b->originX + b->size &&
+            gridY >= b->originY &&
+            gridY < b->originY + b->size)
+        {
             buildings[i] = buildings[*buildingCount - 1];
             (*buildingCount)--;
+            return true;
         }
     }
 
-    return true;
+    return false;
 }
 
 int main(int argc, char** argv) {
@@ -613,10 +625,9 @@ int main(int argc, char** argv) {
                 for (int dy = 0; dy < size; dy++) {
                     int cx = originX + dx;
                     int cy = originY + dy;
-                    for (int i = 0; i < buildingCount; i++) {
-                        if (buildings[i].x == cx && buildings[i].y == cy) { canPlace = false; break; }
+                    if (IsTileOccupied(cx, cy, buildings, buildingCount)) {
+                        canPlace = false; break;
                     }
-                    if (!canPlace) break;
                 }
                 if (!canPlace) break;
             }
@@ -624,16 +635,15 @@ int main(int argc, char** argv) {
 
         if (!mouseOverToolbar && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && currentBuildingIdx != BUILDING_NONE && canPlace) {
             int size = BUILDING_TYPES[currentBuildingIdx].size;
-            if (buildingCount + (size * size) > buildingCapacity) {
-                buildingCapacity = (buildingCapacity == 0) ? (size * size) : buildingCapacity * 2;
-                while (buildingCount + (size * size) > buildingCapacity) buildingCapacity *= 2;
+            if (buildingCount + 1 > buildingCapacity) {
+                buildingCapacity = (buildingCapacity == 0) ? 1 : buildingCapacity * 2;
                 buildings = realloc(buildings, buildingCapacity * sizeof(Building));
             }
+
             for (int dx = 0; dx < size; dx++) {
                 for (int dy = 0; dy < size; dy++) {
                     int cx = originX + dx;
                     int cy = originY + dy;
-
                     for (int k = 0; k < itemCount; k++) {
                         if ((int)floorf(items[k].x / tileSize) == cx && (int)floorf(items[k].y / tileSize) == cy) {
                             for (int m = k; m < itemCount - 1; m++) items[m] = items[m+1];
@@ -641,22 +651,26 @@ int main(int argc, char** argv) {
                             k--;
                         }
                     }
-
-                    Building newB;
-                    memset(&newB, 0, sizeof(Building));
-                    newB.x = originX + dx;
-                    newB.y = originY + dy;
-                    newB.originX = originX;
-                    newB.originY = originY;
-                    newB.size = size;
-                    newB.typeIdx = currentBuildingIdx;
-                    newB.rotation = currentHeldRotation;
-                    newB.outputType = currentDrillOutputMode;
-                    for(int l=0; l<2; l++) for(int j=0; j<5; j++) newB.belt_items[l][j] = -1.0f;
-
-                    buildings[buildingCount++] = newB;
                 }
             }
+
+            Building newB;
+            memset(&newB, 0, sizeof(Building));
+
+            newB.x = originX;
+            newB.y = originY;
+            newB.originX = originX;
+            newB.originY = originY;
+            newB.size = size;
+            newB.typeIdx = currentBuildingIdx;
+            newB.rotation = currentHeldRotation;
+            newB.outputType = currentDrillOutputMode;
+
+            for (int l = 0; l < 2; l++)
+                for (int j = 0; j < 5; j++)
+                    newB.belt_items[l][j] = -1.0f;
+
+            buildings[buildingCount++] = newB;
         }
 
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
@@ -670,20 +684,10 @@ int main(int argc, char** argv) {
             if (currentBuildingIdx != BUILDING_NONE) {
                 currentHeldRotation = (currentHeldRotation + rotMod) % 360;
             } else {
-                int targetOriginX = -1, targetOriginY = -1, targetSize = -1;
                 for (int i = 0; i < buildingCount; i++) {
-                    if (buildings[i].x == gridX && buildings[i].y == gridY) {
-                        targetOriginX = buildings[i].originX;
-                        targetOriginY = buildings[i].originY;
-                        targetSize = buildings[i].size;
-                        break;
-                    }
-                }
-                if (targetSize != -1) {
-                    for (int i = 0; i < buildingCount; i++) {
-                        if (buildings[i].originX == targetOriginX && buildings[i].originY == targetOriginY && buildings[i].size == targetSize) {
+                    if (gridX >= buildings[i].originX && gridX < buildings[i].originX + buildings[i].size &&
+                        gridY >= buildings[i].originY && gridY < buildings[i].originY + buildings[i].size) {
                             buildings[i].rotation = (buildings[i].rotation + rotMod) % 360;
-                        }
                     }
                 }
             }
@@ -694,7 +698,8 @@ int main(int argc, char** argv) {
                 currentBuildingIdx = BUILDING_NONE;
             } else {
                 for (int i = 0; i < buildingCount; i++) {
-                    if (buildings[i].x == gridX && buildings[i].y == gridY) {
+                    if (gridX >= buildings[i].originX && gridX < buildings[i].originX + buildings[i].size &&
+                        gridY >= buildings[i].originY && gridY < buildings[i].originY + buildings[i].size) {
                         currentBuildingIdx = buildings[i].typeIdx;
                         break;
                     }
@@ -718,8 +723,20 @@ int main(int argc, char** argv) {
         for (int y = startY; y <= endY; y++) DrawLine(startX * tileSize, y * tileSize, endX * tileSize, y * tileSize, (Color){ 45, 45, 45, 255 });
 
         for (int i = 0; i < buildingCount; i++) {
-            if (buildings[i].x != buildings[i].originX || buildings[i].y != buildings[i].originY) continue;
-            DrawBuilding(buildings[i].typeIdx, buildings[i].originX, buildings[i].originY, buildings[i].size, buildings[i].rotation, tileSize, BUILDING_TYPES[buildings[i].typeIdx].color, buildings, buildingCount, buildings[i].progress, buildings[i].outputType, false);
+            DrawBuilding(
+                buildings[i].typeIdx,
+                buildings[i].originX,
+                buildings[i].originY,
+                buildings[i].size,
+                buildings[i].rotation,
+                tileSize,
+                BUILDING_TYPES[buildings[i].typeIdx].color,
+                buildings,
+                buildingCount,
+                buildings[i].progress,
+                buildings[i].outputType,
+                false
+            );
         }
 
         for (int i = 0; i < buildingCount; i++) {
