@@ -470,8 +470,9 @@ int main(void) {
         }
 
         if (IsKeyPressed(KEY_R)) {
+            int rotMod = (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) ? 270 : 90;
             if (currentBuildingIdx != -1) {
-                currentHeldRotation = (currentHeldRotation + 90) % 360;
+                currentHeldRotation = (currentHeldRotation + rotMod) % 360;
             } else {
                 int targetOriginX = -1, targetOriginY = -1, targetSize = -1;
                 for (int i = 0; i < buildingCount; i++) {
@@ -485,7 +486,7 @@ int main(void) {
                 if (targetSize != -1) {
                     for (int i = 0; i < buildingCount; i++) {
                         if (buildings[i].originX == targetOriginX && buildings[i].originY == targetOriginY && buildings[i].size == targetSize) {
-                            buildings[i].rotation = (buildings[i].rotation + 90) % 360;
+                            buildings[i].rotation = (buildings[i].rotation + rotMod) % 360;
                         }
                     }
                 }
