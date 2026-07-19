@@ -46,7 +46,6 @@ static double get_time_ms() {
 }
 
 static void game_logic_tick(void) {
-    // printf("tick\n");
 }
 
 static Vector2 AngleToDir(float angleDeg) {
@@ -75,6 +74,43 @@ static void DrawKinkedChevron(Vector2 a, Vector2 c, float kinkOffset, float thic
     Vector2 mid = { (a.x + c.x) / 2.0f + perp.x * kinkOffset, (a.y + c.y) / 2.0f + perp.y * kinkOffset };
     DrawLineEx(a, mid, thickness, color);
     DrawLineEx(mid, c, thickness, color);
+}
+
+static void DrawBuilding(int texIdx, int originX, int originY, int size, int rotation, int tileSize, Color color) {
+    Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
+    for (int dx = 0; dx < size; dx++) {
+        for (int dy = 0; dy < size; dy++) {
+            Rectangle dest = {
+                (float)(originX + dx) * tileSize + (tileSize / 2.0f),
+                (float)(originY + dy) * tileSize + (tileSize / 2.0f),
+                (float)tileSize,
+                (float)tileSize
+            };
+            DrawRectanglePro(dest, origin, (float)rotation, color);
+        }
+    }
+
+    Vector2 dir = AngleToDir((float)rotation);
+    float originPxX = (float)originX * tileSize;
+    float originPxY = (float)originY * tileSize;
+    float sizePx = (float)size * tileSize;
+    Vector2 buildingCenter = { originPxX + sizePx / 2.0f, originPxY + sizePx / 2.0f };
+    Color chevronColor = (Color){ 20, 20, 20, 220 };
+
+    if (texIdx == 0) {
+        Vector2 tip = { buildingCenter.x + dir.x * tileSize, buildingCenter.y + dir.y * tileSize };
+        DrawChevron(tip, tileSize * 0.18f, (float)rotation, 35.0f, 2.0f, chevronColor);
+    } else if (texIdx == 1) {
+        Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
+        Vector2 startTip = { tileCenter.x - dir.x * tileSize * 0.22f, tileCenter.y - dir.y * tileSize * 0.22f };
+        Vector2 endTip = { tileCenter.x + dir.x * tileSize * 0.22f, tileCenter.y + dir.y * tileSize * 0.22f };
+        DrawChevron(startTip, tileSize * 0.14f, (float)rotation, 35.0f, 2.0f, chevronColor);
+        DrawChevron(endTip, tileSize * 0.14f, (float)rotation, 35.0f, 2.0f, chevronColor);
+    } else if (texIdx == 2) {
+        Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
+        Vector2 edgePoint = { tileCenter.x + dir.x * tileSize * 0.5f, tileCenter.y + dir.y * tileSize * 0.5f };
+        DrawKinkedChevron(tileCenter, edgePoint, tileSize * 0.12f, 3.0f, chevronColor);
+    }
 }
 
 int main(void) {
@@ -242,60 +278,14 @@ int main(void) {
         for (int y = startY; y <= endY; y++) DrawLine(startX * tileSize, y * tileSize, endX * tileSize, y * tileSize, (Color){ 45, 45, 45, 255 });
 
         for (int i = 0; i < tileCount; i++) {
-            Rectangle dest = {
-                (float)tiles[i].x * tileSize + (tileSize / 2.0f),
-                (float)tiles[i].y * tileSize + (tileSize / 2.0f),
-                (float)tileSize,
-                (float)tileSize
-            };
-
-            Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
-
-            DrawRectanglePro(dest, origin, (float)tiles[i].rotation, TILE_TYPES[tiles[i].texIdx].color);
-        }
-
-        for (int i = 0; i < tileCount; i++) {
             if (tiles[i].x != tiles[i].originX || tiles[i].y != tiles[i].originY) continue;
-
-            Vector2 dir = AngleToDir((float)tiles[i].rotation);
-            float originPxX = (float)tiles[i].originX * tileSize;
-            float originPxY = (float)tiles[i].originY * tileSize;
-            float sizePx = (float)tiles[i].size * tileSize;
-            Vector2 buildingCenter = { originPxX + sizePx / 2.0f, originPxY + sizePx / 2.0f };
-            Color chevronColor = (Color){ 20, 20, 20, 220 };
-
-            if (tiles[i].texIdx == 0) {
-                Vector2 tip = { buildingCenter.x + dir.x * tileSize, buildingCenter.y + dir.y * tileSize };
-                DrawChevron(tip, tileSize * 0.18f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
-            } else if (tiles[i].texIdx == 1) {
-                Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
-                Vector2 startTip = { tileCenter.x - dir.x * tileSize * 0.22f, tileCenter.y - dir.y * tileSize * 0.22f };
-                Vector2 endTip = { tileCenter.x + dir.x * tileSize * 0.22f, tileCenter.y + dir.y * tileSize * 0.22f };
-                DrawChevron(startTip, tileSize * 0.14f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
-                DrawChevron(endTip, tileSize * 0.14f, (float)tiles[i].rotation, 35.0f, 2.0f, chevronColor);
-            } else if (tiles[i].texIdx == 2) {
-                Vector2 tileCenter = { originPxX + tileSize / 2.0f, originPxY + tileSize / 2.0f };
-                Vector2 edgePoint = { tileCenter.x + dir.x * tileSize * 0.5f, tileCenter.y + dir.y * tileSize * 0.5f };
-                DrawKinkedChevron(tileCenter, edgePoint, tileSize * 0.12f, 3.0f, chevronColor);
-            }
+            DrawBuilding(tiles[i].texIdx, tiles[i].originX, tiles[i].originY, tiles[i].size, tiles[i].rotation, tileSize, TILE_TYPES[tiles[i].texIdx].color);
         }
 
         if (!mouseOverToolbar && currentTexIndex != -1) {
-            int size = TILE_TYPES[currentTexIndex].size;
-            Vector2 origin = { (float)tileSize / 2.0f, (float)tileSize / 2.0f };
             Color base = TILE_TYPES[currentTexIndex].color;
             Color tint = canPlace ? (Color){ base.r, base.g, base.b, 150 } : (Color){ 255, 0, 0, 150 };
-            for (int dx = 0; dx < size; dx++) {
-                for (int dy = 0; dy < size; dy++) {
-                    Rectangle dest = {
-                        (float)(gridX + dx) * tileSize + (tileSize / 2.0f),
-                        (float)(gridY + dy) * tileSize + (tileSize / 2.0f),
-                        (float)tileSize,
-                        (float)tileSize
-                    };
-                    DrawRectanglePro(dest, origin, (float)currentHeldRotation, tint);
-                }
-            }
+            DrawBuilding(currentTexIndex, gridX, gridY, TILE_TYPES[currentTexIndex].size, currentHeldRotation, tileSize, tint);
         }
 
         EndMode2D();
