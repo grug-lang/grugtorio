@@ -463,7 +463,7 @@ static void advance_belt_lane(building_t* buildings, int building_count, int bel
         float current_d = belt->belt_items[lane][j] * lane_len;
         float limit_d = (j == 0) ? max_d_0 : (belt->belt_items[lane][j - 1] * lane_len - BELT_ITEM_SPACING);
 
-        float new_d = current_d + (BELT_LANE_LENGTH / UPS);
+        float new_d = current_d + 8.0f;
         if (new_d > limit_d) new_d = limit_d;
         if (new_d < 0.0f) new_d = 0.0f;
 
@@ -785,7 +785,7 @@ static void draw_building_overlay(building_type_e type_idx, int origin_x, int or
         float ymax = origin_px_y + tile_size;
 
         for (int c = 0; c < 2; c++) {
-            float t = fmodf(time_sec * 1.0f + c * 0.5f, 1.0f);
+            float t = fmodf(time_sec * 1.875f + c * 0.5f, 1.0f);
             Vector2 pos;
             float chev_angle;
 
