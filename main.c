@@ -445,7 +445,8 @@ static void transfer_belt_lane(building_t* buildings, int building_count, int be
     bool target_is_turning = (target_in_rot != target->rotation);
 
     int target_lane = lane;
-    if (!source_is_turning && !target_is_turning && (belt->rotation != target->rotation)) {
+    int rel_rot = (target->rotation - belt->rotation + 360) % 360;
+    if (!source_is_turning && !target_is_turning && (rel_rot == ROT_CCW)) {
         target_lane = !target_lane;
     }
 
