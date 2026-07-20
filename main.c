@@ -523,9 +523,9 @@ static void transfer_belt_lane(building_t* buildings, int building_count, int be
         }
 
         int rel_rot = (target->rotation - belt->rotation + 360) % 360;
-        bool uses_factorio_third_item_entry = occupied == 2 && rel_rot == ROT_CW;
+        bool is_weird_third_item_sideload_case = occupied == 2 && rel_rot == ROT_CW && lane == 1;
 
-        if (uses_factorio_third_item_entry) {
+        if (is_weird_third_item_sideload_case) {
             start_d_target = 0.5f * BELT_LANE_LENGTH;
         }
 
