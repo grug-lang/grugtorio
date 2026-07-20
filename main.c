@@ -698,6 +698,59 @@ static void draw_building_base(int origin_x, int origin_y, int size, int rotatio
     }
 }
 
+static bool clip_line_to_rect(Vector2* p0, Vector2* p1, float xmin, float xmax, float ymin, float ymax) {
+    float dx = p1->x - p0->x;
+    float dy = p1->y - p0->y;
+    float t0 = 0.0f;
+    float t1 = 1.0f;
+
+    float p[4] = { -dx, dx, -dy, dy };
+    float q[4] = { p0->x - xmin, xmax - p0->x, p0->y - ymin, ymax - p0->y };
+
+    for (int i = 0; i < 4; i++) {
+        if (fabsf(p[i]) < 1e-6f) {
+            if (q[i] < 0.0f) return false;
+        } else {
+            float t = q[i] / p[i];
+            if (p[i] < 0.0f) {
+                if (t > t1) return false;
+                if (t > t0) t0 = t;
+            } else {
+                if (t < t0) return false;
+                if (t < t1) t1 = t;
+            }
+        }
+    }
+
+    if (t0 > t1) return false;
+
+    Vector2 cp0 = { p0->x + t0 * dx, p0->y + t0 * dy };
+    Vector2 cp1 = { p0->x + t1 * dx, p0->y + t1 * dy };
+    *p0 = cp0;
+    *p1 = cp1;
+    return true;
+}
+
+static void draw_clipped_chevron(Vector2 tip, float arm_length, float angle_deg, float spread_deg, float thickness, Color color, float xmin, float xmax, float ymin, float ymax) {
+    float back_angle = angle_deg + 180.0f;
+    Vector2 arm1 = angle_to_dir(back_angle - spread_deg);
+    Vector2 arm2 = angle_to_dir(back_angle + spread_deg);
+    Vector2 p1 = { tip.x + arm1.x * arm_length, tip.y + arm1.y * arm_length };
+    Vector2 p2 = { tip.x + arm2.x * arm_length, tip.y + arm2.y * arm_length };
+
+    Vector2 l1_p0 = tip;
+    Vector2 l1_p1 = p1;
+    if (clip_line_to_rect(&l1_p0, &l1_p1, xmin, xmax, ymin, ymax)) {
+        DrawLineEx(l1_p0, l1_p1, thickness, color);
+    }
+
+    Vector2 l2_p0 = tip;
+    Vector2 l2_p1 = p2;
+    if (clip_line_to_rect(&l2_p0, &l2_p1, xmin, xmax, ymin, ymax)) {
+        DrawLineEx(l2_p0, l2_p1, thickness, color);
+    }
+}
+
 static void draw_building_overlay(building_type_e type_idx, int origin_x, int origin_y, int size, int rotation, int tile_size, building_t* buildings, int building_count, int progress, item_type_e output_type, bool draw_overlay) {
     Vector2 dir = angle_to_dir((float)rotation);
     float origin_px_x = (float)origin_x * tile_size;
@@ -723,7 +776,13 @@ static void draw_building_overlay(building_type_e type_idx, int origin_x, int or
         Vector2 tile_center = { origin_px_x + tile_size / 2.0f, origin_px_y + tile_size / 2.0f };
         Color anim_chevron_color = (Color){ 230, 200, 40, 255 };
 
+        bool has_feeder = has_belt_feeding_from(origin_x, origin_y, input_rot, buildings, building_count);
+
         float time_sec = (float)GetTime();
+        float xmin = origin_px_x;
+        float xmax = origin_px_x + tile_size;
+        float ymin = origin_px_y;
+        float ymax = origin_px_y + tile_size;
 
         for (int c = 0; c < 2; c++) {
             float t = fmodf(time_sec * 1.0f + c * 0.5f, 1.0f);
@@ -765,7 +824,11 @@ static void draw_building_overlay(building_type_e type_idx, int origin_x, int or
                 chev_angle = is_clockwise ? a + 180.0f : a;
             }
 
-            draw_chevron(pos, tile_size * 0.14f, chev_angle, 35.0f, 2.0f, anim_chevron_color);
+            if (has_feeder) {
+                draw_chevron(pos, tile_size * 0.14f, chev_angle, 35.0f, 2.0f, anim_chevron_color);
+            } else {
+                draw_clipped_chevron(pos, tile_size * 0.14f, chev_angle, 35.0f, 2.0f, anim_chevron_color, xmin, xmax, ymin, ymax);
+            }
         }
     } else if (type_idx == BUILDING_INSERTER) {
         Vector2 tile_center = { origin_px_x + tile_size / 2.0f, origin_px_y + tile_size / 2.0f };
