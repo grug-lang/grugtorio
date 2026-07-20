@@ -1,3 +1,4 @@
+import argparse
 import difflib
 import json
 import os
@@ -11,6 +12,14 @@ OUTPUT_FILE = "build/test-output.grugtorio.json"
 
 
 def run_tests():
+    parser = argparse.ArgumentParser(description="Run grugtorio tests.")
+    parser.add_argument(
+        "--test",
+        metavar="NAME",
+        help="Run only the specified test",
+    )
+    args = parser.parse_args()
+
     # Ensure executable exists
     if not os.path.exists(EXECUTABLE):
         sys.exit(f"Error: Executable not found at {EXECUTABLE}")
@@ -20,12 +29,19 @@ def run_tests():
         sys.exit(f"Error: Directory '{TESTS_DIR}' not found")
 
     # Get optional runner (e.g., Valgrind) from environment variable
-    # If empty, runner will be an empty list []
     runner = os.environ.get("TEST_RUNNER", "").split()
 
-    test_dirs = [
-        d for d in os.listdir(TESTS_DIR) if os.path.isdir(os.path.join(TESTS_DIR, d))
-    ]
+    if args.test:
+        dir_path = os.path.join(TESTS_DIR, args.test)
+        if not os.path.isdir(dir_path):
+            sys.exit(f"Error: Test '{args.test}' not found")
+        test_dirs = [args.test]
+    else:
+        test_dirs = [
+            d
+            for d in os.listdir(TESTS_DIR)
+            if os.path.isdir(os.path.join(TESTS_DIR, d))
+        ]
 
     for test_name in sorted(test_dirs):
         dir_path = os.path.join(TESTS_DIR, test_name)
@@ -96,9 +112,9 @@ def run_tests():
             )
             diff_text = "\n".join(diff)
 
-            # Print the error with the file location
             sys.exit(
-                f"Error: Output mismatch for test '{test_name}'.\n\n"
+                f"Test '{test_name}' failed.\n\n"
+                f"Error: Output mismatch.\n\n"
                 f"The full actual output file can be found at: {OUTPUT_FILE}\n\n"
                 f"Diff:\n{diff_text}"
             )

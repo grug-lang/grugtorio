@@ -257,23 +257,6 @@ void load_world(const char* path, building_t** buildings, int* building_count, i
     free(data);
 }
 
-static int get_feeder_rotation(building_t* belt, building_t* buildings, int building_count) {
-    int dirs[4] = { DIR_UP, DIR_RIGHT, DIR_DOWN, DIR_LEFT };
-    for (int i = 0; i < 4; i++) {
-        int rot = dirs[i];
-        int dx = (int)roundf(sinf(rot * DEG2RAD));
-        int dy = (int)roundf(-cosf(rot * DEG2RAD));
-        int check_x = belt->x - dx;
-        int check_y = belt->y - dy;
-        for (int b = 0; b < building_count; b++) {
-            if (buildings[b].type_idx == BUILDING_TRANSPORT_BELT && buildings[b].x == check_x && buildings[b].y == check_y && buildings[b].rotation == rot) {
-                return rot;
-            }
-        }
-    }
-    return -1;
-}
-
 static bool has_belt_feeding_from(int target_x, int target_y, int feeder_rot, building_t* buildings, int count) {
     if (!buildings) return false;
     int dx = (int)roundf(sinf(feeder_rot * DEG2RAD));
@@ -298,15 +281,19 @@ static int get_belt_input_rotation(building_t* belt, building_t* buildings, int 
     return rot;
 }
 
-static int get_belt_lane_capacity(building_t* belt, int lane, building_t* buildings, int building_count) {
-    int feeder_rot = get_feeder_rotation(belt, buildings, building_count);
-    if (feeder_rot != -1) {
-        int rel_rot = (belt->rotation - feeder_rot + 360) % 360;
-        if (rel_rot == 0) return 4;
-        if (rel_rot == ROT_CW) return (lane == 1) ? 2 : 5;
-        if (rel_rot == ROT_CCW) return (lane == 0) ? 2 : 5;
+static float get_belt_lane_length(building_t* belt, int lane, building_t* buildings, int building_count) {
+    int in_rot = get_belt_input_rotation(belt, buildings, building_count);
+    int out_rot = belt->rotation;
+    if (in_rot == out_rot) {
+        return 256.0f;
     }
-    return 4;
+    int rel_rot = (out_rot - in_rot + 360) % 360;
+    if (rel_rot == ROT_CW) {
+        return (lane == 1) ? 106.0f : 295.0f;
+    } else if (rel_rot == ROT_CCW) {
+        return (lane == 0) ? 106.0f : 295.0f;
+    }
+    return 256.0f;
 }
 
 static Vector2 angle_to_dir(float angle_deg) {
@@ -318,17 +305,65 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
     for (int i = 0; i < building_count; i++) {
         if (buildings[i].type_idx == BUILDING_TRANSPORT_BELT) {
             for (int l = 0; l < 2; l++) {
-                int capacity = get_belt_lane_capacity(&buildings[i], l, buildings, building_count);
-                for (int j = 0; j < capacity; j++) {
+                float L_i = get_belt_lane_length(&buildings[i], l, buildings, building_count);
+
+                int dir_x = (int)roundf(sinf(buildings[i].rotation * DEG2RAD));
+                int dir_y = (int)roundf(-cosf(buildings[i].rotation * DEG2RAD));
+                int tx = buildings[i].x + dir_x;
+                int ty = buildings[i].y + dir_y;
+
+                int target_belt_idx = -1;
+                for (int k = 0; k < building_count; k++) {
+                    if (buildings[k].type_idx == BUILDING_TRANSPORT_BELT && buildings[k].x == tx && buildings[k].y == ty) {
+                        target_belt_idx = k;
+                        break;
+                    }
+                }
+
+                if (target_belt_idx != -1) {
+                    Vector2 t_dir = angle_to_dir((float)buildings[target_belt_idx].rotation);
+                    if (buildings[target_belt_idx].x + (int)t_dir.x == buildings[i].x && buildings[target_belt_idx].y + (int)t_dir.y == buildings[i].y) {
+                        target_belt_idx = -1;
+                    }
+                }
+
+                float max_d_0 = L_i;
+                if (target_belt_idx != -1) {
+                    float L_target = get_belt_lane_length(&buildings[target_belt_idx], l, buildings, building_count);
+                    int target_last_j = -1;
+                    for (int j = 0; j < 5; j++) {
+                        if (buildings[target_belt_idx].belt_items[l][j] >= 0.0f) {
+                            target_last_j = j;
+                        }
+                    }
+                    if (target_last_j != -1) {
+                        float d_target_last = buildings[target_belt_idx].belt_items[l][target_last_j] * L_target;
+                        max_d_0 = L_i - (64.0f - d_target_last);
+                    } else {
+                        max_d_0 = L_i + 64.0f;
+                    }
+                }
+
+                for (int j = 0; j < 5; j++) {
                     if (buildings[i].belt_items[l][j] >= 0.0f) {
-                        float max_p = 1.0f;
-                        if (j > 0 && buildings[i].belt_items[l][j - 1] >= 0.0f) {
-                            max_p = buildings[i].belt_items[l][j - 1] - 0.25f;
+                        float current_d = buildings[i].belt_items[l][j] * L_i;
+                        float limit_d;
+                        if (j == 0) {
+                            limit_d = max_d_0;
+                        } else {
+                            float prev_d = buildings[i].belt_items[l][j - 1] * L_i;
+                            limit_d = prev_d - 64.0f;
                         }
-                        buildings[i].belt_items[l][j] += 1.0f / UPS;
-                        if (buildings[i].belt_items[l][j] > max_p) {
-                            buildings[i].belt_items[l][j] = max_p;
+
+                        float new_d = current_d + (256.0f / UPS);
+                        if (new_d > limit_d) {
+                            new_d = limit_d;
                         }
+                        if (new_d < 0.0f) {
+                            new_d = 0.0f;
+                        }
+
+                        buildings[i].belt_items[l][j] = new_d / L_i;
                     }
                 }
             }
@@ -354,19 +389,56 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
 
                     if (target_belt_idx != -1) {
                         Vector2 t_dir = angle_to_dir((float)buildings[target_belt_idx].rotation);
-                        if (buildings[target_belt_idx].x + (int)t_dir.x == buildings[i].x && buildings[target_belt_idx].y + (int)t_dir.y == buildings[i].y) continue;
+                        if (buildings[target_belt_idx].x + (int)t_dir.x == buildings[i].x && buildings[target_belt_idx].y + (int)t_dir.y == buildings[i].y) {
+                            target_belt_idx = -1;
+                        }
+                    }
+
+                    if (target_belt_idx != -1) {
+                        float L_i = get_belt_lane_length(&buildings[i], l, buildings, building_count);
+
+                        int source_in_rot = get_belt_input_rotation(&buildings[i], buildings, building_count);
+                        bool source_is_turning = (source_in_rot != buildings[i].rotation);
+
+                        int target_in_rot = get_belt_input_rotation(&buildings[target_belt_idx], buildings, building_count);
+                        bool target_is_turning = (target_in_rot != buildings[target_belt_idx].rotation);
 
                         int target_lane = l;
-
-                        int capacity = get_belt_lane_capacity(&buildings[target_belt_idx], target_lane, buildings, building_count);
-                        int last_item_idx = -1;
-                        for (int j = 0; j < capacity; j++) {
-                            if (buildings[target_belt_idx].belt_items[target_lane][j] >= 0.0f) last_item_idx = j;
+                        if (!source_is_turning && !target_is_turning && (buildings[i].rotation != buildings[target_belt_idx].rotation)) {
+                            target_lane = !target_lane;
                         }
 
-                        if (last_item_idx < capacity - 1 && (last_item_idx == -1 || buildings[target_belt_idx].belt_items[target_lane][last_item_idx] >= 0.25f)) {
-                            buildings[target_belt_idx].belt_items[target_lane][last_item_idx + 1] = 0.0f;
-                            buildings[target_belt_idx].belt_item_types[target_lane][last_item_idx + 1] = buildings[i].belt_item_types[l][0];
+                        float L_target = get_belt_lane_length(&buildings[target_belt_idx], target_lane, buildings, building_count);
+
+                        int target_last_j = -1;
+                        for (int j = 0; j < 5; j++) {
+                            if (buildings[target_belt_idx].belt_items[target_lane][j] >= 0.0f) {
+                                target_last_j = j;
+                            }
+                        }
+
+                        float excess_d = (buildings[i].belt_items[l][0] * L_i) - L_i;
+                        if (excess_d < 0.0f) excess_d = 0.0f;
+
+                        bool can_transfer = false;
+                        float start_d_target = excess_d;
+
+                        if (target_last_j == -1) {
+                            can_transfer = true;
+                        } else {
+                            float d_target_last = buildings[target_belt_idx].belt_items[target_lane][target_last_j] * L_target;
+                            if (d_target_last >= 64.0f) {
+                                can_transfer = (target_last_j < 4);
+                                if (start_d_target > d_target_last - 64.0f) {
+                                    start_d_target = d_target_last - 64.0f;
+                                }
+                            }
+                        }
+
+                        if (can_transfer) {
+                            int new_j = target_last_j + 1;
+                            buildings[target_belt_idx].belt_items[target_lane][new_j] = start_d_target / L_target;
+                            buildings[target_belt_idx].belt_item_types[target_lane][new_j] = buildings[i].belt_item_types[l][0];
 
                             for (int j = 0; j < 4; j++) {
                                 buildings[i].belt_items[l][j] = buildings[i].belt_items[l][j + 1];
@@ -374,6 +446,8 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
                             }
                             buildings[i].belt_items[l][4] = -1.0f;
                         }
+                    } else {
+                        buildings[i].belt_items[l][0] = 1.0f;
                     }
                 }
             }
@@ -404,20 +478,27 @@ static void game_logic_tick(building_t* buildings, int building_count, item_t** 
                     int rel_rot = (buildings[target_belt_idx].rotation - buildings[i].rotation + 360) % 360;
                     int l = (rel_rot == ROT_CCW) ? 0 : 1;
 
-                    float insert_progress = (rel_rot == 0) ? 0.25f : 0.5f;
+                    float L_target = get_belt_lane_length(&buildings[target_belt_idx], l, buildings, building_count);
+                    float insert_d = (rel_rot == 0) ? 32.0f : 103.0f;
 
-                    int capacity = get_belt_lane_capacity(&buildings[target_belt_idx], l, buildings, building_count);
                     int last_item_idx = -1;
-                    for (int j = 0; j < capacity; j++) {
+                    for (int j = 0; j < 5; j++) {
                         if (buildings[target_belt_idx].belt_items[l][j] >= 0.0f)
                             last_item_idx = j;
                     }
 
-                    if (last_item_idx < capacity - 1 &&
-                        (last_item_idx == -1 ||
-                        buildings[target_belt_idx].belt_items[l][last_item_idx] >= insert_progress + 0.25f)) {
+                    bool can_insert = false;
+                    if (last_item_idx == -1) {
+                        can_insert = true;
+                    } else if (last_item_idx < 3) {
+                        float d_last = buildings[target_belt_idx].belt_items[l][last_item_idx] * L_target;
+                        if (d_last >= insert_d + 64.0f) {
+                            can_insert = true;
+                        }
+                    }
 
-                        buildings[target_belt_idx].belt_items[l][last_item_idx + 1] = insert_progress;
+                    if (can_insert) {
+                        buildings[target_belt_idx].belt_items[l][last_item_idx + 1] = insert_d / L_target;
                         buildings[target_belt_idx].belt_item_types[l][last_item_idx + 1] = buildings[i].output_type;
                         buildings[i].progress = 0;
                     }
@@ -507,26 +588,22 @@ static void draw_building_overlay(building_type_e type_idx, int origin_x, int or
         int input_rot = get_belt_input_rotation(&self_belt, buildings, building_count);
         Vector2 in_dir = angle_to_dir((float)input_rot);
         Vector2 tile_center = { origin_px_x + tile_size / 2.0f, origin_px_y + tile_size / 2.0f };
-        Color anim_chevron_color = (Color){ 230, 200, 40, 255 }; // Yellow
+        Color anim_chevron_color = (Color){ 230, 200, 40, 255 };
 
-        // Use global time to animate the chevrons at a smooth 1 tile per second
         float time_sec = (float)GetTime();
 
         for (int c = 0; c < 2; c++) {
-            // Two chevrons moving along the track, spaced 0.5 apart
             float t = fmodf(time_sec * 1.0f + c * 0.5f, 1.0f);
             Vector2 pos;
             float chev_angle;
 
             if (input_rot == rotation) {
-                // Straight belt progression
                 Vector2 start_pos = { tile_center.x - in_dir.x * tile_size * 0.5f, tile_center.y - in_dir.y * tile_size * 0.5f };
                 Vector2 end_pos = { tile_center.x + dir.x * tile_size * 0.5f, tile_center.y + dir.y * tile_size * 0.5f };
                 pos.x = start_pos.x + (end_pos.x - start_pos.x) * t;
                 pos.y = start_pos.y + (end_pos.y - start_pos.y) * t;
                 chev_angle = (float)rotation;
             } else {
-                // Turning belt progression
                 int rel_rot = (rotation - input_rot + 360) % 360;
                 bool is_clockwise = (rel_rot == ROT_CW);
 
@@ -548,16 +625,13 @@ static void draw_building_overlay(building_type_e type_idx, int origin_x, int or
                     end_angle = start_angle - 90.0f;
                 }
 
-                // Interpolate along the curve
                 float a = start_angle + (end_angle - start_angle) * t;
                 pos.x = (origin_px_x + pivot_x * tile_size) + cosf(a * DEG2RAD) * r;
                 pos.y = (origin_px_y + pivot_y * tile_size) + sinf(a * DEG2RAD) * r;
 
-                // Make the chevron face the tangent of the curve
                 chev_angle = is_clockwise ? a + 180.0f : a;
             }
 
-            // Draw the animated chevron
             draw_chevron(pos, tile_size * 0.14f, chev_angle, 35.0f, 2.0f, anim_chevron_color);
         }
     } else if (type_idx == BUILDING_INSERTER) {
@@ -634,12 +708,30 @@ int main(int argc, char** argv) {
     char* output_save_path = NULL;
     int run_ticks = -1;
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--input-save") == 0 && i + 1 < argc) {
-            load_world(argv[++i], &buildings, &building_count, &building_capacity, &items, &item_count, &item_capacity, &camera);
-        } else if (strcmp(argv[i], "--output-save") == 0 && i + 1 < argc) {
-            output_save_path = argv[++i];
-        } else if (strcmp(argv[i], "--ticks") == 0 && i + 1 < argc) {
-            run_ticks = atoi(argv[++i]);
+        if (strcmp(argv[i], "--input-save") == 0) {
+            if (i + 1 < argc) {
+                load_world(argv[++i], &buildings, &building_count, &building_capacity, &items, &item_count, &item_capacity, &camera);
+            } else {
+                fprintf(stderr, "Error: --input-save requires a file path argument.\n");
+                exit(EXIT_FAILURE);
+            }
+        } else if (strcmp(argv[i], "--output-save") == 0) {
+            if (i + 1 < argc) {
+                output_save_path = argv[++i];
+            } else {
+                fprintf(stderr, "Error: --output-save requires a file path argument.\n");
+                exit(EXIT_FAILURE);
+            }
+        } else if (strcmp(argv[i], "--ticks") == 0) {
+            if (i + 1 < argc) {
+                run_ticks = atoi(argv[++i]);
+            } else {
+                fprintf(stderr, "Error: --ticks requires an integer argument.\n");
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            fprintf(stderr, "Error: Unknown argument '%s'\n", argv[i]);
+            exit(EXIT_FAILURE);
         }
     }
 
@@ -866,7 +958,7 @@ int main(int argc, char** argv) {
                             if (in_rot == out_rot) {
                                 Vector2 dir = angle_to_dir(out_rot);
                                 Vector2 right = { -dir.y, dir.x };
-                                float p_offset = prog - 0.625f;
+                                float p_offset = prog - 0.5f;
                                 pos = (Vector2){ tile_center.x + right.x * lane_offset * tile_size + dir.x * p_offset * tile_size, tile_center.y + right.y * lane_offset * tile_size + dir.y * p_offset * tile_size };
                             } else {
                                 int rel_rot = (out_rot - in_rot + 360) % 360;
