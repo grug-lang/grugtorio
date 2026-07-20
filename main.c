@@ -1019,6 +1019,47 @@ static bool remove_building_at_cursor(int grid_x, int grid_y, building_t* buildi
     return false;
 }
 
+static void handle_f_key_deletion(game_state_t* state, Vector2 mouse_world, int tile_size) {
+    if (!IsKeyDown(KEY_F)) return;
+
+    float delete_radius = tile_size * 1.0f;
+    float delete_radius_sq = delete_radius * delete_radius;
+
+    for (int i = 0; i < state->item_count; i++) {
+        float dx = state->items[i].x - mouse_world.x;
+        float dy = state->items[i].y - mouse_world.y;
+        if (dx * dx + dy * dy <= delete_radius_sq) {
+            state->items[i] = state->items[state->item_count - 1];
+            state->item_count--;
+            i--;
+        }
+    }
+
+    for (int i = 0; i < state->building_count; i++) {
+        building_t* b = &state->buildings[i];
+        if (b->type_idx != BUILDING_TRANSPORT_BELT) continue;
+
+        for (int l = 0; l < BELT_LANE_COUNT; l++) {
+            for (int j = 0; j < MAX_BELT_SLOTS; j++) {
+                if (b->belt_items[l][j] < 0.0f) continue;
+
+                Vector2 pos = compute_belt_item_position(b, state->buildings, state->building_count, l, b->belt_items[l][j], tile_size);
+                float dx = pos.x - mouse_world.x;
+                float dy = pos.y - mouse_world.y;
+
+                if (dx * dx + dy * dy <= delete_radius_sq) {
+                    for (int k = j; k < MAX_BELT_SLOTS - 1; k++) {
+                        b->belt_items[l][k] = b->belt_items[l][k + 1];
+                        b->belt_item_types[l][k] = b->belt_item_types[l][k + 1];
+                    }
+                    b->belt_items[l][MAX_BELT_SLOTS - 1] = -1.0f;
+                    j--;
+                }
+            }
+        }
+    }
+}
+
 static placement_preview_t compute_placement_preview(game_state_t* state, Vector2 mouse_world, int tile_size) {
     placement_preview_t preview = { 0, 0, true };
     if (state->current_building_idx == BUILDING_NONE) return preview;
@@ -1153,7 +1194,7 @@ static void handle_camera_pan(game_state_t* state, float dt) {
     if (IsKeyDown(KEY_S)) state->camera.target.y += move_speed;
     if (IsKeyDown(KEY_A)) state->camera.target.x -= move_speed;
     if (IsKeyDown(KEY_D)) state->camera.target.x += move_speed;
-    if (IsKeyPressed(KEY_F)) ToggleFullscreen();
+    if (IsKeyPressed(KEY_F11)) ToggleFullscreen();
 }
 
 static void handle_camera_zoom(game_state_t* state) {
@@ -1266,6 +1307,7 @@ static void run_interactive(game_state_t* state, int tile_size, const char* outp
         handle_removal_input(state, mouse_world, grid_x, grid_y, tile_size);
         handle_rotation_input(state, grid_x, grid_y);
         handle_pickup_input(state, grid_x, grid_y);
+        handle_f_key_deletion(state, mouse_world, tile_size);
 
         BeginDrawing();
         ClearBackground((Color){ 20, 20, 20, 255 });
