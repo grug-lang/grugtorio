@@ -30,37 +30,39 @@ build/grugtorio --input-save tests/belt-zigzag/save.grugtorio.json
 
 | Item | Method | Ingredients |
 |---|---|---|
-| **Automation** | Craft | Copper plate + Iron gear wheel |
+| **Automation** | Craft | 1 Copper plate + 1 Iron gear wheel |
+| Copper plate | Smelt | 1 Copper ore |
 | Iron gear wheel | Craft | 2 Iron plate |
 | Iron plate | Smelt | 1 Iron ore |
-| Copper plate | Smelt | 1 Copper ore |
-| **Logistic** | Craft | Iron gear wheel + Transport belt |
-| Transport belt | Craft | Iron plate + Iron gear wheel |
-| **Chemical** | Craft | Engine unit + Advanced circuit |
-| Engine unit | Craft | Iron gear wheel + Pipe + Steel plate |
+| **Logistic** | Craft | 1 Iron gear wheel + 1 Transport belt |
+| Transport belt | Craft | 1 Iron gear wheel + 1 Iron plate |
+| Inserter | Craft | 1 Electronic circuit + 1 Iron gear wheel + 1 Iron plate |
+| Electronic circuit | Craft | 3 Copper cable + 1 Iron plate |
+| Copper cable | Craft | 0.5 Copper plate |
+| **Chemical** | Craft | 3 Advanced circuit + 2 Engine unit |
+| Advanced circuit | Craft | 4 Copper cable + 2 Electronic circuit + 2 Plastic bar |
+| Plastic bar | Craft | 0.5 Coal |
+| Engine unit | Craft | 1 Iron gear wheel + 2 Pipe + 1 Steel plate |
 | Pipe | Craft | 1 Iron plate |
 | Steel plate | Smelt | 5 Iron plate |
-| Advanced circuit | Craft | Electronic circuit + Copper cable + Plastic bar |
-| Electronic circuit | Craft | Iron plate + Copper cable |
-| Copper cable | Craft | 1 Copper plate |
-| Plastic bar | Craft | 1 Coal |
-| **Production** | Craft | Electric furnace + Productivity module + Rail |
-| Electric furnace | Craft | Steel plate + Advanced circuit + Stone brick |
-| Stone brick | Smelt | 1 Stone |
-| Productivity module | Craft | Advanced circuit + Electronic circuit |
-| Rail | Craft | Steel plate + Stone + Iron stick |
-| Iron stick | Craft | 1 Iron plate |
-| **Utility** | Craft | Flying robot frame + Low density structure + Processing unit |
-| Flying robot frame | Craft | Steel plate + Electronic circuit + Iron gear wheel + Battery |
-| Battery | Craft | Iron plate + Copper plate |
-| Low density structure | Craft | Copper plate + Steel plate + Plastic bar |
-| Processing unit | Craft | Electronic circuit + Advanced circuit |
-| **Space** | Launch | Rocket part + Satellite |
-| Rocket part | Craft | Low density structure + Processing unit |
-| Satellite | Craft | Low density structure + Processing unit + Solar panel + Accumulator + Radar |
-| Solar panel | Craft | Copper plate + Electronic circuit + Steel plate |
-| Accumulator | Craft | Iron plate + Battery |
-| Radar | Craft | Electronic circuit + Iron gear wheel + Steel plate |
+| **Production** | Craft | 30 Rail + 1 Electric furnace + 1 Productivity module |
+| Rail | Craft | 0.5 Iron stick + 0.5 Steel plate + 0.5 Stone |
+| Iron stick | Craft | 0.5 Iron plate |
+| Electric furnace | Craft | 5 Advanced circuit + 10 Steel plate + 10 Stone brick |
+| Stone brick | Smelt | 2 Stone |
+| Productivity module | Craft | 5 Advanced circuit + 5 Electronic circuit |
+| **Utility** | Craft | 2 Processing unit + 1 Flying robot frame + 3 Low density structure |
+| Processing unit | Craft | 2 Advanced circuit + 20 Electronic circuit |
+| Flying robot frame | Craft | 2 Battery + 1 Electric engine unit + 3 Electronic circuit + 1 Steel plate |
+| Electric engine unit | Craft | 2 Electronic circuit + 1 Engine unit |
+| Battery | Craft | 1 Copper plate + 1 Iron plate |
+| Low density structure | Craft | 20 Copper plate + 5 Plastic bar + 2 Steel plate |
+| **Space** | Launch | 100 Rocket part + 1 Satellite |
+| Rocket part | Craft | 10 Low density structure + 10 Processing unit |
+| Satellite | Craft | 100 Accumulator + 100 Low density structure + 100 Processing unit + 5 Radar + 100 Solar panel |
+| Accumulator | Craft | 5 Battery + 2 Iron plate |
+| Solar panel | Craft | 5 Copper plate + 15 Electronic circuit + 5 Steel plate |
+| Radar | Craft | 5 Electronic circuit + 5 Iron gear wheel + 10 Iron plate |
 
 ## Testing
 
