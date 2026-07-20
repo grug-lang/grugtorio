@@ -469,7 +469,7 @@ static void draw_kinked_chevron(Vector2 a, Vector2 c, float kink_offset, float t
     DrawLineEx(mid, c, thickness, color);
 }
 
-static void draw_building(building_type_e type_idx, int origin_x, int origin_y, int size, int rotation, int tile_size, Color color, building_t* buildings, int building_count, int progress, item_type_e output_type, bool draw_overlay) {
+static void draw_building_base(int origin_x, int origin_y, int size, int rotation, int tile_size, Color color) {
     Vector2 origin = { (float)tile_size / 2.0f, (float)tile_size / 2.0f };
     for (int dx = 0; dx < size; dx++) {
         for (int dy = 0; dy < size; dy++) {
@@ -482,7 +482,9 @@ static void draw_building(building_type_e type_idx, int origin_x, int origin_y, 
             DrawRectanglePro(dest, origin, (float)rotation, color);
         }
     }
+}
 
+static void draw_building_overlay(building_type_e type_idx, int origin_x, int origin_y, int size, int rotation, int tile_size, building_t* buildings, int building_count, int progress, item_type_e output_type, bool draw_overlay) {
     Vector2 dir = angle_to_dir((float)rotation);
     float origin_px_x = (float)origin_x * tile_size;
     float origin_px_y = (float)origin_y * tile_size;
@@ -505,16 +507,69 @@ static void draw_building(building_type_e type_idx, int origin_x, int origin_y, 
         int input_rot = get_belt_input_rotation(&self_belt, buildings, building_count);
         Vector2 in_dir = angle_to_dir((float)input_rot);
         Vector2 tile_center = { origin_px_x + tile_size / 2.0f, origin_px_y + tile_size / 2.0f };
-        Vector2 start_tip = { tile_center.x - in_dir.x * tile_size * 0.22f, tile_center.y - in_dir.y * tile_size * 0.22f };
-        Vector2 end_tip = { tile_center.x + dir.x * tile_size * 0.22f, tile_center.y + dir.y * tile_size * 0.22f };
+        Color anim_chevron_color = (Color){ 230, 200, 40, 255 }; // Yellow
 
-        draw_chevron(start_tip, tile_size * 0.14f, (float)input_rot, 35.0f, 2.0f, chevron_color);
-        draw_chevron(end_tip, tile_size * 0.14f, (float)rotation, 35.0f, 2.0f, chevron_color);
+        // Use global time to animate the chevrons at a smooth 1 tile per second
+        float time_sec = (float)GetTime();
+
+        for (int c = 0; c < 2; c++) {
+            // Two chevrons moving along the track, spaced 0.5 apart
+            float t = fmodf(time_sec * 1.0f + c * 0.5f, 1.0f);
+            Vector2 pos;
+            float chev_angle;
+
+            if (input_rot == rotation) {
+                // Straight belt progression
+                Vector2 start_pos = { tile_center.x - in_dir.x * tile_size * 0.5f, tile_center.y - in_dir.y * tile_size * 0.5f };
+                Vector2 end_pos = { tile_center.x + dir.x * tile_size * 0.5f, tile_center.y + dir.y * tile_size * 0.5f };
+                pos.x = start_pos.x + (end_pos.x - start_pos.x) * t;
+                pos.y = start_pos.y + (end_pos.y - start_pos.y) * t;
+                chev_angle = (float)rotation;
+            } else {
+                // Turning belt progression
+                int rel_rot = (rotation - input_rot + 360) % 360;
+                bool is_clockwise = (rel_rot == ROT_CW);
+
+                int idx = (input_rot / 90) % 4;
+                if (!is_clockwise) idx = (idx + 1) % 4;
+                static const float pivot_xs[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+                static const float pivot_ys[4] = { 1.0f, 1.0f, 0.0f, 0.0f };
+                float pivot_x = pivot_xs[idx];
+                float pivot_y = pivot_ys[idx];
+
+                float r = 0.5f * tile_size;
+
+                float start_angle, end_angle;
+                if (is_clockwise) {
+                    start_angle = (float)((input_rot + 180) % 360);
+                    end_angle = start_angle + 90.0f;
+                } else {
+                    start_angle = (float)input_rot;
+                    end_angle = start_angle - 90.0f;
+                }
+
+                // Interpolate along the curve
+                float a = start_angle + (end_angle - start_angle) * t;
+                pos.x = (origin_px_x + pivot_x * tile_size) + cosf(a * DEG2RAD) * r;
+                pos.y = (origin_px_y + pivot_y * tile_size) + sinf(a * DEG2RAD) * r;
+
+                // Make the chevron face the tangent of the curve
+                chev_angle = is_clockwise ? a + 180.0f : a;
+            }
+
+            // Draw the animated chevron
+            draw_chevron(pos, tile_size * 0.14f, chev_angle, 35.0f, 2.0f, anim_chevron_color);
+        }
     } else if (type_idx == BUILDING_INSERTER) {
         Vector2 tile_center = { origin_px_x + tile_size / 2.0f, origin_px_y + tile_size / 2.0f };
         Vector2 edge_point = { tile_center.x + dir.x * tile_size * 0.5f, tile_center.y + dir.y * tile_size * 0.5f };
         draw_kinked_chevron(tile_center, edge_point, tile_size * 0.125f, 3.0f, chevron_color);
     }
+}
+
+static void draw_building(building_type_e type_idx, int origin_x, int origin_y, int size, int rotation, int tile_size, Color color, building_t* buildings, int building_count, int progress, item_type_e output_type, bool draw_overlay) {
+    draw_building_base(origin_x, origin_y, size, rotation, tile_size, color);
+    draw_building_overlay(type_idx, origin_x, origin_y, size, rotation, tile_size, buildings, building_count, progress, output_type, draw_overlay);
 }
 
 static bool remove_item_at_cursor(Vector2 mouse_world, item_t* items, int* item_count, int tile_size) {
@@ -770,14 +825,24 @@ int main(int argc, char** argv) {
         for (int y = start_y; y <= end_y; y++) DrawLine(start_x * tile_size, y * tile_size, end_x * tile_size, y * tile_size, (Color){ 45, 45, 45, 255 });
 
         for (int i = 0; i < building_count; i++) {
-            draw_building(
+            draw_building_base(
+                buildings[i].origin_x,
+                buildings[i].origin_y,
+                buildings[i].size,
+                buildings[i].rotation,
+                tile_size,
+                BUILDING_TYPES[buildings[i].type_idx].color
+            );
+        }
+
+        for (int i = 0; i < building_count; i++) {
+            draw_building_overlay(
                 buildings[i].type_idx,
                 buildings[i].origin_x,
                 buildings[i].origin_y,
                 buildings[i].size,
                 buildings[i].rotation,
                 tile_size,
-                BUILDING_TYPES[buildings[i].type_idx].color,
                 buildings,
                 building_count,
                 buildings[i].progress,
