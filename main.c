@@ -102,6 +102,7 @@ typedef struct {
     building_type_e current_building_idx;
     int current_held_rotation;
     item_type_e current_drill_output_mode;
+    bool paused;
 } game_state_t;
 
 typedef struct {
@@ -1165,17 +1166,25 @@ static void run_interactive(game_state_t* state, int tile_size, const char* outp
         double elapsed = now - last_time;
         last_time = now;
         if (elapsed > MAX_ACCUMULATED_MS) elapsed = MAX_ACCUMULATED_MS;
-        accumulator += elapsed;
+
+        if (IsKeyPressed(KEY_P)) {
+            state->paused = !state->paused;
+        }
 
         int ticks_this_frame = 0;
-        while (accumulator >= UPDATE_DT_MS) {
-            game_logic_tick(state, tile_size);
-            accumulator -= UPDATE_DT_MS;
-            ticks_this_frame++;
-            if (ticks_this_frame >= MAX_TICKS_PER_FRAME) {
-                accumulator = 0.0;
-                break;
+        if (!state->paused) {
+            accumulator += elapsed;
+            while (accumulator >= UPDATE_DT_MS) {
+                game_logic_tick(state, tile_size);
+                accumulator -= UPDATE_DT_MS;
+                ticks_this_frame++;
+                if (ticks_this_frame >= MAX_TICKS_PER_FRAME) {
+                    accumulator = 0.0;
+                    break;
+                }
             }
+        } else {
+            accumulator = 0.0;
         }
 
         handle_hotbar_shortcuts(state);
@@ -1212,6 +1221,12 @@ static void run_interactive(game_state_t* state, int tile_size, const char* outp
         render_hud(state, grid_x, grid_y, screen_width, dt, ticks_this_frame);
         render_hotbar(state->current_building_idx, screen_width, screen_height);
 
+        if (state->paused) {
+            const char* pause_msg = "Press P to unpause";
+            int text_w = MeasureText(pause_msg, 20);
+            DrawText(pause_msg, (screen_width - text_w) / 2, 10, 20, RAYWHITE);
+        }
+
         EndDrawing();
     }
 
@@ -1230,6 +1245,7 @@ int main(int argc, char** argv) {
     state.current_held_rotation = DIR_NORTH;
     state.current_drill_output_mode = ITEM_IRON_ORE;
     state.camera.zoom = 1.0f;
+    state.paused = false;
 
     char* output_save_path = NULL;
     int run_ticks = -1;
