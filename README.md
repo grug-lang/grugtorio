@@ -22,9 +22,9 @@ build/grugtorio --input-save tests/belt-zigzag/save.grugtorio.json
 
 | Option                                 | Description                                 |
 | -------------------------------------- | ------------------------------------------- |
-| `--input-save [.grugtorio.json path]`  | Path to load a grugtorio save from.         |
-| `--output-save [.grugtorio.json path]` | Path to write a grugtorio save to on exit.  |
-| `--ticks [N]`                          | Number of ticks to simulate before exiting. |
+| `--input-save <.grugtorio.json path>`  | Path to load a grugtorio save from.         |
+| `--output-save <.grugtorio.json path>` | Path to write a grugtorio save to on exit.  |
+| `--ticks <N>`                          | Number of ticks to simulate before exiting. |
 
 ## 7 buildings
 
